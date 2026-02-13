@@ -2,23 +2,25 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/gin-contrib/cors"
+	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	// リリースモードにセット
 	gin.SetMode(gin.ReleaseMode)
 
 	r := gin.Default()
 
-	// CORS設定
 	r.Use(cors.Default())
+
+	// フロントエンドの静的ファイルを配信
+	r.Use(static.Serve("/", static.LocalFile("./shadowing-app-frontend/dist", true)))
 
 	r.GET("/search", func(c *gin.Context) {
 		query := c.DefaultQuery("q", "")
@@ -35,7 +37,7 @@ func main() {
 		}
 		defer resp.Body.Close()
 
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			log.Println("Failed to read YouTube response:", err)
 			c.JSON(500, gin.H{"error": "Failed to read YouTube response"})
@@ -50,8 +52,6 @@ func main() {
 			return
 		}
 
-		// 必要な情報を抽出してフロントエンドに渡す
-		// 必要な情報を抽出してフロントエンドに渡す
 		videos := []map[string]string{}
 		for _, item := range youtubeResponse.Items {
 			video := map[string]string{
@@ -59,11 +59,15 @@ func main() {
 				"title":     item.Snippet.Title,
 				"thumbnail": item.Snippet.Thumbnails.Default.URL,
 			}
-			//log.Print(item.Id.VideoId)
 			videos = append(videos, video)
 		}
 
 		c.JSON(200, gin.H{"results": videos})
+	})
+
+	// SPAのフォールバック: 未知のルートをindex.htmlにリダイレクト
+	r.NoRoute(func(c *gin.Context) {
+		c.File("./shadowing-app-frontend/dist/index.html")
 	})
 
 	r.Run(":8080")
