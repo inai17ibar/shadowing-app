@@ -36,8 +36,8 @@ function SearchPage() {
   return (
     <div className="search-page">
       <div className="search-hero">
-        <h1>シャドーイング練習</h1>
-        <p className="search-subtitle">YouTubeの動画を使ってシャドーイングを練習しよう</p>
+        <h2>YouTube動画でシャドーイング</h2>
+        <p className="search-subtitle">動画を検索して、聞きながら声に出して練習しよう</p>
         <form onSubmit={handleSearch} className="search-form">
           <input
             type="text"
