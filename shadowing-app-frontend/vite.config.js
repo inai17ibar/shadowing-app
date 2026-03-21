@@ -7,6 +7,7 @@ export default defineConfig({
     proxy: {
       '/search': 'http://localhost:8080',
       '/extract': 'http://localhost:8080',
+      '/api': 'http://localhost:8080',
     },
   },
   test: {

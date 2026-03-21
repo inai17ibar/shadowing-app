@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 const SPEECH_RATES = [0.5, 0.75, 1, 1.25, 1.5]
 
 function TextReaderPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   // Input state
-  const [inputMode, setInputMode] = useState('url') // 'url' or 'text'
+  const [inputMode, setInputMode] = useState('url') // 'url', 'text', or 'saved'
   const [url, setUrl] = useState('')
   const [rawText, setRawText] = useState('')
   const [loading, setLoading] = useState(false)
@@ -15,8 +16,14 @@ function TextReaderPage() {
 
   // Content state
   const [title, setTitle] = useState('')
+  const [sourceUrl, setSourceUrl] = useState('')
   const [sentences, setSentences] = useState([])
   const [currentIndex, setCurrentIndex] = useState(-1)
+  const [savedId, setSavedId] = useState(null)
+
+  // Saved texts list
+  const [savedTexts, setSavedTexts] = useState([])
+  const [savedLoading, setSavedLoading] = useState(false)
 
   // Speech state
   const [isSpeaking, setIsSpeaking] = useState(false)
@@ -34,7 +41,6 @@ function TextReaderPage() {
       const available = speechSynthesis.getVoices()
       setVoices(available)
       if (available.length > 0 && !selectedVoice) {
-        // Prefer English voices for shadowing
         const enVoice = available.find(v => v.lang.startsWith('en'))
         setSelectedVoice(enVoice ? enVoice.name : available[0].name)
       }
@@ -44,7 +50,14 @@ function TextReaderPage() {
     return () => speechSynthesis.removeEventListener('voiceschanged', loadVoices)
   }, [selectedVoice])
 
-  // Split text into sentences
+  // Load saved text if ?id= parameter is present
+  useEffect(() => {
+    const id = searchParams.get('id')
+    if (id) {
+      loadSavedText(id)
+    }
+  }, [searchParams])
+
   const splitIntoSentences = (text) => {
     return text
       .split(/(?<=[.!?。！？])\s+|(?<=[.!?。！？])(?=[A-Z「『])|\n+/)
@@ -67,6 +80,8 @@ function TextReaderPage() {
         return
       }
       setTitle(data.title || '')
+      setSourceUrl(url)
+      setSavedId(null)
       const allText = (data.paragraphs || []).join('\n')
       const sents = splitIntoSentences(allText)
       setSentences(sents)
@@ -83,10 +98,93 @@ function TextReaderPage() {
     e.preventDefault()
     if (!rawText.trim()) return
     setTitle('')
+    setSourceUrl('')
+    setSavedId(null)
     const sents = splitIntoSentences(rawText)
     setSentences(sents)
     setCurrentIndex(-1)
     setError('')
+  }
+
+  // Save current text to server
+  const handleSave = async () => {
+    if (sentences.length === 0) return
+    setError('')
+    try {
+      const res = await fetch('/api/texts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title || '無題のテキスト',
+          source_url: sourceUrl,
+          paragraphs: sentences,
+        }),
+      })
+      const data = await res.json()
+      if (data.error) {
+        setError(data.error)
+        return
+      }
+      setSavedId(data.id)
+    } catch {
+      setError('保存に失敗しました。')
+    }
+  }
+
+  // Load saved texts list
+  const loadSavedTexts = async () => {
+    setSavedLoading(true)
+    try {
+      const res = await fetch('/api/texts')
+      const data = await res.json()
+      setSavedTexts(data.texts || [])
+    } catch {
+      setError('保存済みテキストの取得に失敗しました。')
+    } finally {
+      setSavedLoading(false)
+    }
+  }
+
+  // Load a specific saved text
+  const loadSavedText = async (id) => {
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/texts/${id}`)
+      const data = await res.json()
+      if (data.error) {
+        setError(data.error)
+        return
+      }
+      setTitle(data.title || '')
+      setSourceUrl(data.source_url || '')
+      setSavedId(parseInt(id))
+      setSentences(data.paragraphs || [])
+      setCurrentIndex(-1)
+    } catch {
+      setError('テキストの読み込みに失敗しました。')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Delete a saved text
+  const handleDelete = async (id) => {
+    try {
+      await fetch(`/api/texts/${id}`, { method: 'DELETE' })
+      setSavedTexts(prev => prev.filter(t => t.id !== id))
+      if (savedId === id) {
+        setSavedId(null)
+      }
+    } catch {
+      setError('削除に失敗しました。')
+    }
+  }
+
+  // Switch to saved texts tab
+  const handleShowSaved = () => {
+    setInputMode('saved')
+    loadSavedTexts()
   }
 
   // Scroll to current sentence
@@ -115,7 +213,6 @@ function TextReaderPage() {
     utterance.onend = () => {
       setIsSpeaking(false)
       if (autoAdvance && index + 1 < sentences.length) {
-        // Small pause between sentences for shadowing
         setTimeout(() => speakSentence(index + 1), 1500)
       }
     }
@@ -124,7 +221,6 @@ function TextReaderPage() {
     speechSynthesis.speak(utterance)
   }, [sentences, speechRate, voices, selectedVoice, autoAdvance])
 
-  // Play / Pause
   const togglePlay = () => {
     if (isSpeaking) {
       speechSynthesis.cancel()
@@ -135,28 +231,24 @@ function TextReaderPage() {
     }
   }
 
-  // Repeat current sentence
   const handleRepeat = () => {
     if (currentIndex >= 0) {
       speakSentence(currentIndex)
     }
   }
 
-  // Previous sentence
   const handlePrev = () => {
     speechSynthesis.cancel()
     const idx = Math.max(0, currentIndex - 1)
     speakSentence(idx)
   }
 
-  // Next sentence
   const handleNext = () => {
     speechSynthesis.cancel()
     const idx = Math.min(sentences.length - 1, currentIndex + 1)
     speakSentence(idx)
   }
 
-  // Click on a sentence to play it
   const handleSentenceClick = (index) => {
     speakSentence(index)
   }
@@ -193,7 +285,6 @@ function TextReaderPage() {
     return () => speechSynthesis.cancel()
   }, [])
 
-  // Group voices by language
   const groupedVoices = voices.reduce((acc, v) => {
     const lang = v.lang
     if (!acc[lang]) acc[lang] = []
@@ -202,6 +293,16 @@ function TextReaderPage() {
   }, {})
 
   const hasContent = sentences.length > 0
+
+  const resetToInput = () => {
+    speechSynthesis.cancel()
+    setIsSpeaking(false)
+    setSentences([])
+    setCurrentIndex(-1)
+    setTitle('')
+    setSourceUrl('')
+    setSavedId(null)
+  }
 
   return (
     <div className="text-reader-page">
@@ -212,7 +313,7 @@ function TextReaderPage() {
       {!hasContent && (
         <div className="text-input-section">
           <h2>Webページ読み上げシャドーイング</h2>
-          <p className="text-input-subtitle">URLを入力するか、テキストを直接貼り付けてください</p>
+          <p className="text-input-subtitle">URLを入力するか、テキストを貼り付け、または保存済みテキストから選択</p>
 
           <div className="input-mode-tabs">
             <button
@@ -227,9 +328,15 @@ function TextReaderPage() {
             >
               テキスト入力
             </button>
+            <button
+              className={`tab-button ${inputMode === 'saved' ? 'active' : ''}`}
+              onClick={handleShowSaved}
+            >
+              保存済み
+            </button>
           </div>
 
-          {inputMode === 'url' ? (
+          {inputMode === 'url' && (
             <form onSubmit={handleFetchURL} className="search-form">
               <input
                 type="text"
@@ -242,7 +349,9 @@ function TextReaderPage() {
                 {loading ? '取得中...' : '取得'}
               </button>
             </form>
-          ) : (
+          )}
+
+          {inputMode === 'text' && (
             <form onSubmit={handleLoadText} className="text-form">
               <textarea
                 value={rawText}
@@ -257,6 +366,41 @@ function TextReaderPage() {
             </form>
           )}
 
+          {inputMode === 'saved' && (
+            <div className="saved-texts-list">
+              {savedLoading && <p className="saved-loading">読み込み中...</p>}
+              {!savedLoading && savedTexts.length === 0 && (
+                <p className="saved-empty">保存済みのテキストはまだありません</p>
+              )}
+              {savedTexts.map((item) => (
+                <div key={item.id} className="saved-text-card">
+                  <div
+                    className="saved-text-info"
+                    onClick={() => loadSavedText(item.id)}
+                  >
+                    <h3 className="saved-text-title">{item.title || '無題'}</h3>
+                    {item.source_url && (
+                      <p className="saved-text-url">{item.source_url}</p>
+                    )}
+                    <p className="saved-text-date">
+                      {new Date(item.created_at + 'Z').toLocaleString('ja-JP')}
+                    </p>
+                  </div>
+                  <button
+                    className="delete-button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDelete(item.id)
+                    }}
+                    title="削除"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {error && <p className="error-message">{error}</p>}
         </div>
       )}
@@ -264,19 +408,20 @@ function TextReaderPage() {
       {hasContent && (
         <>
           <div className="reader-header">
-            {title && <h2 className="reader-title">{title}</h2>}
-            <button
-              className="control-button"
-              onClick={() => {
-                speechSynthesis.cancel()
-                setIsSpeaking(false)
-                setSentences([])
-                setCurrentIndex(-1)
-                setTitle('')
-              }}
-            >
-              別のテキストを読む
-            </button>
+            <div className="reader-header-left">
+              {title && <h2 className="reader-title">{title}</h2>}
+              {savedId && <span className="saved-badge">保存済み</span>}
+            </div>
+            <div className="reader-header-actions">
+              {!savedId && (
+                <button className="control-button save-button" onClick={handleSave}>
+                  保存する
+                </button>
+              )}
+              <button className="control-button" onClick={resetToInput}>
+                別のテキストを読む
+              </button>
+            </div>
           </div>
 
           <div className="controls">

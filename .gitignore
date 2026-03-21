@@ -1,3 +1,6 @@
 shadowing-app
 shadowing-app-frontend/node_modules/
 shadowing-app-frontend/dist/
+*.db
+*.db-wal
+*.db-shm
