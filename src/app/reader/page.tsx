@@ -136,8 +136,23 @@ function ReaderInner() {
   useEffect(() => {
     const idParam = searchParams.get("id");
     const urlParam = searchParams.get("url");
+    const fromParam = searchParams.get("from");
     if (idParam) {
       loadSavedText(Number(idParam));
+    } else if (fromParam === "library") {
+      try {
+        const raw = sessionStorage.getItem("library_text");
+        if (raw) {
+          const data = JSON.parse(raw) as { title: string; paragraphs: string[] };
+          setTitle(data.title);
+          setSourceUrl("");
+          const allSentences = data.paragraphs.flatMap((p) => splitToSentences(p));
+          setSentences(allSentences);
+          setCurrentIdx(0);
+          setDoneSet(new Set());
+          sessionStorage.removeItem("library_text");
+        }
+      } catch { /* ignore */ }
     } else if (urlParam) {
       setUrl(urlParam);
       handleUrlSubmit(undefined, urlParam);
