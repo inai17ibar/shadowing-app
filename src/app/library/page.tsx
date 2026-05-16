@@ -27,31 +27,16 @@ export default function LibraryPage() {
       ? LIBRARY_CONTENT
       : LIBRARY_CONTENT.filter((e) => e.level === filter);
 
-  async function handleStart(entry: LibraryEntry) {
+  function handleStart(entry: LibraryEntry) {
     setLoadingId(entry.id);
-    try {
-      const res = await fetch("/api/texts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: entry.title,
-          source_url: `library:${entry.id}`,
-          paragraphs: entry.paragraphs,
-        }),
-      });
-      if (!res.ok) throw new Error();
-      const saved = await res.json();
-      router.push(`/reader?id=${saved.id}`);
-    } catch {
-      sessionStorage.setItem(
-        "library_text",
-        JSON.stringify({
-          title: entry.title,
-          paragraphs: entry.paragraphs,
-        }),
-      );
-      router.push("/reader?from=library");
-    }
+    sessionStorage.setItem(
+      "library_text",
+      JSON.stringify({
+        title: entry.title,
+        paragraphs: entry.paragraphs,
+      }),
+    );
+    router.push("/reader?from=library");
   }
 
   return (

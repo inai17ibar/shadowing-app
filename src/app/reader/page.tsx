@@ -4,9 +4,6 @@ import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 interface SavedTextMeta {
   id: number;
   title: string;
@@ -21,11 +18,13 @@ interface SavedTextFull {
   created_at: string;
 }
 
-// ---------------------------------------------------------------------------
-// Sentence splitting
-// ---------------------------------------------------------------------------
-const SPLIT_RE =
-  /(?<=[.!?。！？])\s+|(?<=[.!?。！？])(?=[A-Z「『])|\n+/;
+interface PronunciationResult {
+  score: number;
+  feedback: string;
+  details: { missed: string[]; added: string[]; correct: string[] };
+}
+
+const SPLIT_RE = /(?<=[.!?。！？])\s+|(?<=[.!?。！？])(?=[A-Z「『])|\n+/;
 
 function splitToSentences(text: string): string[] {
   return text
@@ -34,33 +33,28 @@ function splitToSentences(text: string): string[] {
     .filter((s) => s.length > 0);
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 export default function ReaderPage() {
   return (
-    <Suspense fallback={<div className="max-w-3xl mx-auto px-4 py-10 text-gray-500">読み込み中...</div>}>
+    <Suspense
+      fallback={
+        <div className="max-w-3xl mx-auto px-4 py-10 text-gray-500">
+          読み込み中...
+        </div>
+      }
+    >
       <ReaderInner />
     </Suspense>
   );
 }
 
 function ReaderInner() {
-  // --- input mode ---
   const [inputMode, setInputMode] = useState<"url" | "text" | "saved">("url");
-
-  // --- url mode ---
   const [url, setUrl] = useState("");
   const [urlLoading, setUrlLoading] = useState(false);
-
-  // --- text mode ---
   const [rawText, setRawText] = useState("");
-
-  // --- saved mode ---
   const [savedTexts, setSavedTexts] = useState<SavedTextMeta[]>([]);
   const [savedLoading, setSavedLoading] = useState(false);
 
-  // --- loaded content ---
   const [title, setTitle] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [sentences, setSentences] = useState<string[]>([]);
@@ -68,38 +62,69 @@ function ReaderInner() {
   const [doneSet, setDoneSet] = useState<Set<number>>(new Set());
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // --- TTS settings ---
   const [speed, setSpeed] = useState(1);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const [selectedVoice, setSelectedVoice] = useState<string>("");
+  const [selectedVoice, setSelectedVoice] = useState("");
   const [autoAdvance, setAutoAdvance] = useState(true);
 
-  // --- error ---
+  // Pronunciation practice
+  const [practiceMode, setPracticeMode] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [pronResult, setPronResult] = useState<PronunciationResult | null>(
+    null,
+  );
+  const [pronLoading, setPronLoading] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
   const [error, setError] = useState("");
 
-  // --- refs ---
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const autoAdvanceRef = useRef(autoAdvance);
   const sentencesRef = useRef(sentences);
   const currentIdxRef = useRef(currentIdx);
   const isPlayingRef = useRef(isPlaying);
+  const practiceModeRef = useRef(practiceMode);
+  const scriptContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // keep refs in sync
-  useEffect(() => { autoAdvanceRef.current = autoAdvance; }, [autoAdvance]);
-  useEffect(() => { sentencesRef.current = sentences; }, [sentences]);
-  useEffect(() => { currentIdxRef.current = currentIdx; }, [currentIdx]);
-  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => {
+    autoAdvanceRef.current = autoAdvance;
+  }, [autoAdvance]);
+  useEffect(() => {
+    sentencesRef.current = sentences;
+  }, [sentences]);
+  useEffect(() => {
+    currentIdxRef.current = currentIdx;
+  }, [currentIdx]);
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+  useEffect(() => {
+    practiceModeRef.current = practiceMode;
+  }, [practiceMode]);
 
   const searchParams = useSearchParams();
 
-  // --- load voices ---
+  // Auto-scroll to current sentence
+  useEffect(() => {
+    if (sentences.length === 0) return;
+    const el = document.getElementById(`sentence-${currentIdx}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [currentIdx, sentences.length]);
+
+  // Load voices
   useEffect(() => {
     function loadVoices() {
       const v = window.speechSynthesis.getVoices();
       if (v.length > 0) {
         setVoices(v);
         if (!selectedVoice) {
-          const defaultV = v.find((x) => x.default) ?? v[0];
+          const en = v.find(
+            (x) => x.lang.startsWith("en") && x.default,
+          );
+          const defaultV = en ?? v.find((x) => x.default) ?? v[0];
           setSelectedVoice(defaultV.name);
         }
       }
@@ -111,7 +136,6 @@ function ReaderInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- load saved text by id (URL param or saved-mode click) ---
   const loadSavedText = useCallback(async (id: number) => {
     setError("");
     setUrlLoading(true);
@@ -121,8 +145,8 @@ function ReaderInner() {
       const data: SavedTextFull = await res.json();
       setTitle(data.title);
       setSourceUrl(data.source_url);
-      const allSentences = data.paragraphs.flatMap((p) => splitToSentences(p));
-      setSentences(allSentences);
+      const all = data.paragraphs.flatMap((p) => splitToSentences(p));
+      setSentences(all);
       setCurrentIdx(0);
       setDoneSet(new Set());
     } catch (e) {
@@ -132,7 +156,7 @@ function ReaderInner() {
     }
   }, []);
 
-  // --- handle ?id= or ?url= param on mount ---
+  // Handle ?id=, ?from=library, ?url= on mount
   useEffect(() => {
     const idParam = searchParams.get("id");
     const urlParam = searchParams.get("url");
@@ -143,16 +167,21 @@ function ReaderInner() {
       try {
         const raw = sessionStorage.getItem("library_text");
         if (raw) {
-          const data = JSON.parse(raw) as { title: string; paragraphs: string[] };
+          const data = JSON.parse(raw) as {
+            title: string;
+            paragraphs: string[];
+          };
           setTitle(data.title);
           setSourceUrl("");
-          const allSentences = data.paragraphs.flatMap((p) => splitToSentences(p));
-          setSentences(allSentences);
+          const all = data.paragraphs.flatMap((p) => splitToSentences(p));
+          setSentences(all);
           setCurrentIdx(0);
           setDoneSet(new Set());
           sessionStorage.removeItem("library_text");
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     } else if (urlParam) {
       setUrl(urlParam);
       handleUrlSubmit(undefined, urlParam);
@@ -160,7 +189,6 @@ function ReaderInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- fetch saved texts list ---
   const fetchSavedTexts = useCallback(async () => {
     setSavedLoading(true);
     try {
@@ -179,11 +207,7 @@ function ReaderInner() {
     if (inputMode === "saved") fetchSavedTexts();
   }, [inputMode, fetchSavedTexts]);
 
-  // --- URL submit ---
-  async function handleUrlSubmit(
-    e?: React.FormEvent,
-    overrideUrl?: string,
-  ) {
+  async function handleUrlSubmit(e?: React.FormEvent, overrideUrl?: string) {
     e?.preventDefault();
     const targetUrl = overrideUrl ?? url;
     if (!targetUrl.trim()) return;
@@ -202,8 +226,8 @@ function ReaderInner() {
       const data: { title: string; paragraphs: string[] } = await res.json();
       setTitle(data.title);
       setSourceUrl(targetUrl);
-      const allSentences = data.paragraphs.flatMap((p) => splitToSentences(p));
-      setSentences(allSentences);
+      const all = data.paragraphs.flatMap((p) => splitToSentences(p));
+      setSentences(all);
       setCurrentIdx(0);
       setDoneSet(new Set());
     } catch (e) {
@@ -213,20 +237,18 @@ function ReaderInner() {
     }
   }
 
-  // --- Text paste submit ---
   function handleTextSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!rawText.trim()) return;
     setTitle("貼り付けテキスト");
     setSourceUrl("");
-    const allSentences = splitToSentences(rawText);
-    setSentences(allSentences);
+    const all = splitToSentences(rawText);
+    setSentences(all);
     setCurrentIdx(0);
     setDoneSet(new Set());
     setError("");
   }
 
-  // --- delete saved text ---
   async function handleDeleteSaved(id: number) {
     try {
       const res = await fetch(`/api/texts/${id}`, { method: "DELETE" });
@@ -237,7 +259,6 @@ function ReaderInner() {
     }
   }
 
-  // --- save current text ---
   async function handleSave() {
     if (sentences.length === 0) return;
     try {
@@ -257,7 +278,7 @@ function ReaderInner() {
     }
   }
 
-  // --- TTS playback ---
+  // --- TTS ---
   const speak = useCallback(
     (idx: number) => {
       window.speechSynthesis.cancel();
@@ -270,6 +291,12 @@ function ReaderInner() {
 
       utter.onend = () => {
         setDoneSet((prev) => new Set(prev).add(idx));
+
+        if (practiceModeRef.current) {
+          setIsPlaying(false);
+          return;
+        }
+
         if (
           autoAdvanceRef.current &&
           idx < sentencesRef.current.length - 1
@@ -287,6 +314,8 @@ function ReaderInner() {
       utteranceRef.current = utter;
       setCurrentIdx(idx);
       setIsPlaying(true);
+      setTranscript("");
+      setPronResult(null);
       window.speechSynthesis.speak(utter);
     },
     [speed, voices, selectedVoice],
@@ -305,6 +334,8 @@ function ReaderInner() {
     window.speechSynthesis.cancel();
     const newIdx = Math.max(0, currentIdxRef.current - 1);
     setCurrentIdx(newIdx);
+    setTranscript("");
+    setPronResult(null);
     speak(newIdx);
   }, [speak]);
 
@@ -315,6 +346,8 @@ function ReaderInner() {
       currentIdxRef.current + 1,
     );
     setCurrentIdx(newIdx);
+    setTranscript("");
+    setPronResult(null);
     speak(newIdx);
   }, [speak]);
 
@@ -323,7 +356,77 @@ function ReaderInner() {
     speak(currentIdxRef.current);
   }, [speak]);
 
-  // --- keyboard shortcuts ---
+  // --- Speech Recognition for pronunciation practice ---
+  function startRecording() {
+    const SpeechRecognition =
+      window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setError("このブラウザは音声認識に対応していません");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const result = event.results[0][0].transcript;
+      setTranscript(result);
+      setIsRecording(false);
+    };
+
+    recognition.onerror = () => {
+      setIsRecording(false);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognitionRef.current = recognition;
+    setTranscript("");
+    setPronResult(null);
+    setIsRecording(true);
+    recognition.start();
+  }
+
+  function stopRecording() {
+    recognitionRef.current?.stop();
+    setIsRecording(false);
+  }
+
+  async function checkPronunciation() {
+    if (!transcript || !sentences[currentIdx]) return;
+    setPronLoading(true);
+    try {
+      const res = await fetch("/api/pronunciation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target: sentences[currentIdx],
+          transcript,
+        }),
+      });
+      if (!res.ok) throw new Error("発音チェックに失敗しました");
+      const data: PronunciationResult = await res.json();
+      setPronResult(data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "エラーが発生しました");
+    } finally {
+      setPronLoading(false);
+    }
+  }
+
+  // Auto-check after recording finishes
+  useEffect(() => {
+    if (transcript && practiceMode && !isRecording) {
+      checkPronunciation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transcript, isRecording]);
+
+  // --- Keyboard shortcuts ---
   useEffect(() => {
     if (sentences.length === 0) return;
     function handleKey(e: KeyboardEvent) {
@@ -354,9 +457,9 @@ function ReaderInner() {
     return () => window.removeEventListener("keydown", handleKey);
   }, [sentences.length, playPause, prev, next, repeat]);
 
-  // --- reset ---
   function handleReset() {
     window.speechSynthesis.cancel();
+    recognitionRef.current?.stop();
     setSentences([]);
     setCurrentIdx(0);
     setDoneSet(new Set());
@@ -366,10 +469,14 @@ function ReaderInner() {
     setUrl("");
     setError("");
     setIsPlaying(false);
+    setTranscript("");
+    setPronResult(null);
+    setPracticeMode(false);
+    setIsRecording(false);
   }
 
   // =========================================================================
-  // Render: input modes (before text is loaded)
+  // Render: input modes
   // =========================================================================
   if (sentences.length === 0) {
     return (
@@ -378,8 +485,7 @@ function ReaderInner() {
           テキスト読み上げ
         </h1>
 
-        {/* Mode tabs */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-6 flex-wrap">
           {(
             [
               ["url", "URL入力"],
@@ -410,7 +516,6 @@ function ReaderInner() {
           </div>
         )}
 
-        {/* URL mode */}
         {inputMode === "url" && (
           <form onSubmit={(e) => handleUrlSubmit(e)} className="space-y-4">
             <input
@@ -430,7 +535,6 @@ function ReaderInner() {
           </form>
         )}
 
-        {/* Text mode */}
         {inputMode === "text" && (
           <form onSubmit={handleTextSubmit} className="space-y-4">
             <textarea
@@ -449,7 +553,6 @@ function ReaderInner() {
           </form>
         )}
 
-        {/* Saved mode */}
         {inputMode === "saved" && (
           <div>
             {savedLoading ? (
@@ -491,18 +594,22 @@ function ReaderInner() {
   }
 
   // =========================================================================
-  // Render: playback view (text loaded)
+  // Render: playback view
   // =========================================================================
   const speeds = [0.5, 0.75, 1, 1.25, 1.5];
+  const progress = Math.round(((doneSet.size) / sentences.length) * 100);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
       {/* Title */}
-      <h1 className="text-xl font-bold text-gray-900 mb-1 truncate">
-        {title}
-      </h1>
+      <div className="flex items-start justify-between gap-4 mb-1">
+        <h1 className="text-xl font-bold text-gray-900 truncate">{title}</h1>
+        <span className="text-xs text-gray-400 shrink-0 mt-1">
+          {doneSet.size}/{sentences.length}文 ({progress}%)
+        </span>
+      </div>
       {sourceUrl && (
-        <p className="text-xs text-gray-400 mb-6 truncate">{sourceUrl}</p>
+        <p className="text-xs text-gray-400 mb-4 truncate">{sourceUrl}</p>
       )}
 
       {error && (
@@ -510,6 +617,38 @@ function ReaderInner() {
           {error}
         </div>
       )}
+
+      {/* Progress bar */}
+      <div className="w-full bg-gray-200 rounded-full h-1.5 mb-6">
+        <div
+          className="bg-gradient-to-r from-[#667eea] to-[#764ba2] h-1.5 rounded-full transition-all duration-300"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+
+      {/* Mode toggle */}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setPracticeMode(false)}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            !practiceMode
+              ? "bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+          }`}
+        >
+          リスニングモード
+        </button>
+        <button
+          onClick={() => setPracticeMode(true)}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            practiceMode
+              ? "bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white"
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+          }`}
+        >
+          発音練習モード
+        </button>
+      </div>
 
       {/* Controls card */}
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm mb-6 space-y-4">
@@ -561,7 +700,7 @@ function ReaderInner() {
           </button>
         </div>
 
-        {/* Speed control */}
+        {/* Speed + voice */}
         <div className="flex items-center justify-center gap-2">
           <span className="text-xs text-gray-500 mr-1">速度:</span>
           {speeds.map((s) => (
@@ -579,7 +718,6 @@ function ReaderInner() {
           ))}
         </div>
 
-        {/* Voice selector */}
         <div className="flex items-center justify-center gap-2">
           <label htmlFor="voice-select" className="text-xs text-gray-500">
             音声:
@@ -598,41 +736,177 @@ function ReaderInner() {
           </select>
         </div>
 
-        {/* Auto-advance checkbox */}
-        <div className="flex items-center justify-center gap-2">
-          <input
-            type="checkbox"
-            id="auto-advance"
-            checked={autoAdvance}
-            onChange={(e) => setAutoAdvance(e.target.checked)}
-            className="accent-[#667eea]"
-          />
-          <label htmlFor="auto-advance" className="text-sm text-gray-600">
-            自動で次の文へ進む (1.5秒の間隔)
-          </label>
-        </div>
+        {!practiceMode && (
+          <div className="flex items-center justify-center gap-2">
+            <input
+              type="checkbox"
+              id="auto-advance"
+              checked={autoAdvance}
+              onChange={(e) => setAutoAdvance(e.target.checked)}
+              className="accent-[#667eea]"
+            />
+            <label htmlFor="auto-advance" className="text-sm text-gray-600">
+              自動で次の文へ進む
+            </label>
+          </div>
+        )}
       </div>
 
-      {/* Sentence list */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm mb-6 divide-y divide-gray-100 max-h-[50vh] overflow-y-auto">
+      {/* Pronunciation practice panel */}
+      {practiceMode && (
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm mb-6 space-y-4">
+          <h3 className="text-sm font-semibold text-gray-700">発音練習</h3>
+          <p className="text-xs text-gray-500">
+            お手本を聞いてから、マイクボタンを押して同じ文を話してください
+          </p>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={isRecording ? stopRecording : startRecording}
+              disabled={isPlaying}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                isRecording
+                  ? "bg-red-500 text-white animate-pulse"
+                  : "bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white hover:opacity-90"
+              } disabled:opacity-40`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 0 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+              </svg>
+              {isRecording ? "録音中...タップで停止" : "録音開始"}
+            </button>
+          </div>
+
+          {/* Transcript */}
+          {transcript && (
+            <div className="space-y-2">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">お手本:</p>
+                <p className="text-sm text-gray-800 bg-gray-50 rounded-lg p-3">
+                  {sentences[currentIdx]}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">あなたの発話:</p>
+                <p className="text-sm text-gray-800 bg-blue-50 rounded-lg p-3">
+                  {transcript}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Loading */}
+          {pronLoading && (
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              発音を分析中...
+            </div>
+          )}
+
+          {/* Result */}
+          {pronResult && (
+            <div className="space-y-3">
+              {/* Score */}
+              <div className="flex items-center gap-3">
+                <div
+                  className={`text-2xl font-bold ${
+                    pronResult.score >= 80
+                      ? "text-green-600"
+                      : pronResult.score >= 50
+                        ? "text-yellow-600"
+                        : "text-red-600"
+                  }`}
+                >
+                  {pronResult.score}点
+                </div>
+                <div className="flex-1 bg-gray-200 rounded-full h-2.5">
+                  <div
+                    className={`h-2.5 rounded-full transition-all duration-500 ${
+                      pronResult.score >= 80
+                        ? "bg-green-500"
+                        : pronResult.score >= 50
+                          ? "bg-yellow-500"
+                          : "bg-red-500"
+                    }`}
+                    style={{ width: `${pronResult.score}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Feedback */}
+              <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3">
+                {pronResult.feedback}
+              </p>
+
+              {/* Word details */}
+              {pronResult.details.missed.length > 0 && (
+                <div>
+                  <p className="text-xs text-red-600 font-medium mb-1">
+                    言えなかった単語:
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {pronResult.details.missed.map((w, i) => (
+                      <span
+                        key={i}
+                        className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded"
+                      >
+                        {w}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {pronResult.details.correct.length > 0 && (
+                <div>
+                  <p className="text-xs text-green-600 font-medium mb-1">
+                    正しく言えた単語:
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {pronResult.details.correct.map((w, i) => (
+                      <span
+                        key={i}
+                        className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded"
+                      >
+                        {w}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Script with highlights */}
+      <div
+        ref={scriptContainerRef}
+        className="rounded-xl border border-gray-200 bg-white shadow-sm mb-6 p-5 max-h-[50vh] overflow-y-auto leading-relaxed"
+      >
         {sentences.map((s, i) => (
-          <button
+          <span
             key={i}
+            id={`sentence-${i}`}
             onClick={() => {
               window.speechSynthesis.cancel();
+              setTranscript("");
+              setPronResult(null);
               speak(i);
             }}
-            className={`w-full text-left px-4 py-3 text-sm transition-colors ${
+            className={`cursor-pointer transition-all duration-200 inline ${
               i === currentIdx
-                ? "bg-purple-50 border-l-4 border-[#667eea] font-medium text-gray-900"
+                ? "bg-yellow-200 text-gray-900 font-medium rounded px-0.5"
                 : doneSet.has(i)
-                ? "text-gray-400"
-                : "text-gray-700 hover:bg-gray-50"
+                  ? "text-gray-400"
+                  : "text-gray-700 hover:bg-gray-100 rounded"
             }`}
           >
-            <span className="mr-2 text-xs text-gray-400">{i + 1}.</span>
             {s}
-          </button>
+          </span>
         ))}
       </div>
 
@@ -658,7 +932,6 @@ function ReaderInner() {
         </Link>
       </div>
 
-      {/* Keyboard shortcut hint */}
       <p className="text-xs text-gray-400 mt-4">
         キーボード: Space (再生/一時停止) ・ ← (前) ・ → (次) ・ R (繰り返し)
       </p>
