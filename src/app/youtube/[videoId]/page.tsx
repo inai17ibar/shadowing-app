@@ -177,11 +177,11 @@ export default function VideoPlayerPage() {
   const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-10">
+    <div className="max-w-4xl mx-auto px-4 py-10 animate-fade-in">
       {/* Back button */}
       <Link
         href="/youtube"
-        className="inline-flex items-center text-sm text-gray-500 hover:text-[#667eea] transition-colors mb-6"
+        className="inline-flex items-center text-sm text-gray-500 hover:text-[var(--brand-from)] transition-colors mb-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-from)] rounded"
       >
         &larr; 検索に戻る
       </Link>
@@ -214,9 +214,15 @@ export default function VideoPlayerPage() {
           <div
             className="h-2 bg-gray-200 rounded-full cursor-pointer relative"
             onClick={handleProgressClick}
+            role="slider"
+            aria-label="再生位置"
+            aria-valuenow={Math.round(currentTime)}
+            aria-valuemin={0}
+            aria-valuemax={Math.round(duration)}
+            tabIndex={0}
           >
             <div
-              className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#667eea] to-[#764ba2] rounded-full transition-all duration-150"
+              className="absolute inset-y-0 left-0 bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] rounded-full transition-all duration-150"
               style={{ width: `${progressPct}%` }}
             />
             {/* A-B loop markers */}
@@ -257,7 +263,8 @@ export default function VideoPlayerPage() {
           {/* Play / Pause */}
           <button
             onClick={togglePlay}
-            className="w-12 h-12 flex items-center justify-center rounded-full bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white shadow-md hover:opacity-90 transition-opacity"
+            aria-label={isPlaying ? "一時停止" : "再生"}
+            className="w-12 h-12 flex items-center justify-center rounded-full bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white shadow-md hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-from)] focus-visible:ring-offset-2"
           >
             {isPlaying ? (
               <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -283,7 +290,7 @@ export default function VideoPlayerPage() {
         </div>
 
         {/* Speed control */}
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center justify-center gap-2 flex-wrap">
           <span className="text-xs text-gray-500 mr-1">速度:</span>
           {speeds.map((s) => (
             <button
@@ -291,7 +298,7 @@ export default function VideoPlayerPage() {
               onClick={() => changeSpeed(s)}
               className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors ${
                 speed === s
-                  ? "bg-gradient-to-r from-[#667eea] to-[#764ba2] text-white"
+                  ? "bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
