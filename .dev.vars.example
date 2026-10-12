@@ -2,6 +2,8 @@ NEXTJS_ENV=development
 AUTH_SECRET=dev-secret-please-change-0123456789abcdef
 APPLE_CLIENT_ID=com.example.shadowing
 GOOGLE_CLIENT_IDS=dev-client.apps.googleusercontent.com
+# Web版のログイン画面で使う Google のクライアントID（GOOGLE_CLIENT_IDS にも入れる）
+# GOOGLE_WEB_CLIENT_ID=
 PASSKEY_RP_ID=localhost
 PASSKEY_ORIGINS=http://localhost:3123
 # 空にすると、メールを送らずにコードをサーバーのログに出す

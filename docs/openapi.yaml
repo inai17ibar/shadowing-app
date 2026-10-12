@@ -15,6 +15,13 @@ info:
     - その方法が既に誰かのもの・今が匿名 → 匿名の記録をそのアカウントに統合してサインイン
     - その方法が既に誰かのもの・今が別の本登録アカウント → 409（勝手に切り替えない）
 
+    ## Web版（Cookie）
+    Web版は認証系（`/auth/anonymous`・各サインイン・`/auth/refresh`）を `X-Client: web` を付けて呼ぶ。
+    トークンは本文に入らず、httpOnly・SameSite=Strict の Cookie（`sa_access` は /api/v1、`sa_refresh` は /api/v1/auth）で返る。
+    以後は Cookie だけで認証され、`/auth/refresh` と `/auth/logout` は本文を空にして呼べばよい。
+    Cookie で認証した書き込み系のリクエストは、Origin が同じでなければ 403 にする（CSRF 対策）。
+    使えるログイン方法は `GET /auth/methods` で取れる。
+
     ## オフライン
     練習記録は端末で UUID を振って保存し、通信できるときに `POST /attempts/batch` でまとめて送る。
     同じ id は二重に保存されない。別の端末の記録は `GET /me/attempts` で差分を取る。
@@ -243,6 +250,28 @@ paths:
         "204": { description: 外した }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+
+  /auth/methods:
+    get:
+      summary: このサーバーで使えるログイン方法（Web版のログイン画面用）
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  email: { type: boolean }
+                  google:
+                    oneOf:
+                      - type: object
+                        properties:
+                          webClientId: { type: string, description: Google Identity Services に渡すクライアントID }
+                      - type: "null"
+                  passkey: { type: boolean }
+                  apple: { type: boolean, description: Web版の Sign in with Apple は未対応（常に false） }
 
   /auth/refresh:
     post:

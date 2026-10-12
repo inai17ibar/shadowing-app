@@ -1,4 +1,5 @@
-import { handle, ok } from "@/lib/api/http";
+import { handle } from "@/lib/api/http";
+import { respondTokens } from "@/lib/api/web-session";
 import { authSecret, getStore } from "@/lib/api/env";
 import { rateLimitAuth } from "@/lib/api/auth";
 import { issueTokens } from "@/lib/auth/sessions";
@@ -12,6 +13,6 @@ export async function POST(request: Request) {
     await rateLimitAuth(request);
     const store = getStore();
     const user = await store.createUser();
-    return ok(await issueTokens(store, authSecret(), user), { status: 201 });
+    return respondTokens(request, await issueTokens(store, authSecret(), user), {}, 201);
   });
 }

@@ -188,3 +188,27 @@ App Store 審査（5.2 知的財産）と有料配信の両方を満たす必要
   ローカルの D1 は `.wrangler/state` を消してから適用し直す。
 - 統合は「匿名 → 本登録」の一方向だけ。本登録アカウント同士をまとめたい要望が出たら、別途設計する。
 - iOS 側は、送信待ちの記録を端末に保存し、batch の結果に応じて消す実装が要る（docs/openapi.yaml の説明）。
+
+## ADR-006: Web版でも /api/v1 をすべて使えるようにする（Cookie のセッション）
+
+- **日付**: 2026-10-12
+- **状態**: 提案
+- **決定者**: inatani
+
+### 決定
+
+- 自習用に Web 版も残し、iOS と同じ `/api/v1` を使う画面を作る（今日の課題・練習・教材・自分の文章・記録・
+  アカウント）。既存の YouTube・テキスト・ライブラリの画面はそのまま残す。
+- **Web のトークンは httpOnly の Cookie に入れる。** localStorage だと XSS でトークンを盗まれるため。
+  認証系のエンドポイントは `X-Client: web` のときだけ Cookie で返し、本文にトークンを入れない。
+  iOS（Bearer）の振る舞いは変えない。
+- アクセストークンの Cookie は `/api/v1` に、リフレッシュトークンの Cookie は `/api/v1/auth` にだけ送る。
+- CSRF 対策は SameSite=Strict と、Cookie で認証した書き込み系のリクエストの Origin の確認の二重にする。
+- Web でも初回は匿名サインインし、ログインなしで練習できる。ログイン方法はメールのコード・Google・パスキー。
+  Sign in with Apple の Web 版は Services ID とドメイン検証が別に要るので、今は入れない。
+- Web の練習記録もオフライン時は端末（localStorage）に溜め、`/attempts/batch` で送る（iOS と同じ）。
+
+### 影響
+
+- Google の Web 用クライアントIDを `GOOGLE_WEB_CLIENT_ID` に入れ、`GOOGLE_CLIENT_IDS` にも含める。
+- パスキーを Web で使うには、`PASSKEY_ORIGINS` に Web のオリジンを入れる。

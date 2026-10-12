@@ -17,6 +17,7 @@ export async function POST(request: Request) {
     }
     try {
       return await respondSignIn(
+        request,
         await finishLogin(getStore(), passkeyConfig(), {
           challengeId: body.challengeId,
           response: body.response as Parameters<typeof finishLogin>[2]["response"],

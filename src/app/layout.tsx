@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
+import SessionNotice from "@/components/SessionNotice";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -15,9 +16,14 @@ export const metadata: Metadata = {
 };
 
 const navLinks = [
+  { href: "/today", label: "今日の課題" },
+  { href: "/catalog", label: "教材" },
+  { href: "/texts", label: "自分の文章" },
+  { href: "/progress", label: "記録" },
   { href: "/youtube", label: "YouTube" },
   { href: "/reader", label: "テキスト" },
   { href: "/library", label: "ライブラリ" },
+  { href: "/account", label: "アカウント" },
 ];
 
 export default function RootLayout({
@@ -40,14 +46,14 @@ export default function RootLayout({
           }}
         />
         <header className="bg-[var(--brand-gradient)] bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white shadow-md sticky top-0 z-50">
-          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
             <Link
               href="/"
               className="text-xl font-bold tracking-tight hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 rounded-lg px-1"
             >
               Shadowing Practice
             </Link>
-            <nav className="flex items-center gap-1">
+            <nav className="flex items-center gap-1 overflow-x-auto whitespace-nowrap">
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
@@ -60,6 +66,7 @@ export default function RootLayout({
             </nav>
           </div>
         </header>
+        <SessionNotice />
         <main className="flex-1">{children}</main>
         <footer className="border-t border-gray-200 bg-white">
           <div className="max-w-5xl mx-auto px-4 py-6 text-center text-xs text-gray-400">

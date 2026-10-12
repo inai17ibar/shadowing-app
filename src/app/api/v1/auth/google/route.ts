@@ -33,6 +33,7 @@ export async function POST(request: Request) {
     }
 
     return respondSignIn(
+      request,
       await signInWithIdentity(getStore(), {
         provider: "google",
         subject: claims.sub,

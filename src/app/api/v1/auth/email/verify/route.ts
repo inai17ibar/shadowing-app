@@ -35,6 +35,7 @@ export async function POST(request: Request) {
     }
 
     return respondSignIn(
+      request,
       await signInWithIdentity(store, {
         provider: "email",
         subject: email,

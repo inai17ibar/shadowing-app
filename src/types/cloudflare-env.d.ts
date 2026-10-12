@@ -15,6 +15,8 @@ declare global {
     APPLE_PRIVATE_KEY?: string;
     /** Google ログインの OAuth クライアントID（カンマ区切り） */
     GOOGLE_CLIENT_IDS?: string;
+    /** Web版のログイン画面で使う Google のクライアントID（GOOGLE_CLIENT_IDS にも含めること） */
+    GOOGLE_WEB_CLIENT_ID?: string;
     /** パスキーの RP ID（ドメイン）・表示名・許可する origin（カンマ区切り） */
     PASSKEY_RP_ID?: string;
     PASSKEY_RP_NAME?: string;

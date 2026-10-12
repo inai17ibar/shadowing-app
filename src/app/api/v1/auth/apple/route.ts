@@ -40,6 +40,7 @@ export async function POST(request: Request) {
         : null;
 
     return respondSignIn(
+      request,
       await signInWithIdentity(getStore(), {
         provider: "apple",
         subject: claims.sub,

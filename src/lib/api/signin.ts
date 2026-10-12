@@ -1,12 +1,13 @@
 /**
  * サインイン系エンドポイント共通のレスポンス。
  */
-import { ApiError, ok } from "./http";
+import { ApiError } from "./http";
+import { respondTokens } from "./web-session";
 import { authSecret, getStore } from "./env";
 import { issueTokens } from "@/lib/auth/sessions";
 import type { SignInOutcome } from "@/lib/auth/identity";
 
-export async function respondSignIn(outcome: SignInOutcome) {
+export async function respondSignIn(request: Request, outcome: SignInOutcome) {
   if (outcome.status === "conflict") {
     throw new ApiError(
       "conflict",
@@ -14,14 +15,15 @@ export async function respondSignIn(outcome: SignInOutcome) {
     );
   }
   const tokens = await issueTokens(getStore(), authSecret(), outcome.user);
-  return ok(
+  return respondTokens(
+    request,
+    tokens,
     {
-      ...tokens,
       created: outcome.created,
       linked: outcome.linked,
       // 匿名で練習した記録を、このアカウントに引き継いだ
       mergedAnonymous: outcome.mergedAnonymous,
     },
-    { status: outcome.created ? 201 : 200 },
+    outcome.created ? 201 : 200,
   );
 }

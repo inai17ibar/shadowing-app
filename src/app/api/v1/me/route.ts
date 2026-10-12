@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/api/auth";
 import { appleConfig, getStore } from "@/lib/api/env";
 import { revokeAppleToken } from "@/lib/auth/apple";
 import type { Profile } from "@/lib/db/store";
+import { clearSessionCookies } from "@/lib/api/web-session";
 import { isLevel } from "@/lib/practice-plan";
 
 // GET /api/v1/me — プロフィール。初回アクセスで既定値を作る
@@ -59,7 +60,7 @@ export async function DELETE(request: Request) {
       );
     }
     await store.deleteUser(user.id);
-    return new Response(null, { status: 204 });
+    return clearSessionCookies(new Response(null, { status: 204 }), request);
   });
 }
 
