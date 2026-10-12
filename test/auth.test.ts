@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import { createTestD1 } from "./helpers/d1.ts";
 import { createStore } from "../src/lib/db/store.ts";
 import { base64url, decodeJwt, sha256Hex, signHs256, verifyHs256 } from "../src/lib/auth/jwt.ts";
-import { verifyAppleIdentityToken, makeClientSecret, AppleTokenError } from "../src/lib/auth/apple.ts";
+import { verifyAppleIdentityToken, makeClientSecret } from "../src/lib/auth/apple.ts";
+import { verifyGoogleIdToken } from "../src/lib/auth/google.ts";
+import { IdTokenError } from "../src/lib/auth/oidc.ts";
 import { issueTokens, rotateRefreshToken, verifyAccessToken } from "../src/lib/auth/sessions.ts";
 
 const SECRET = "test-secret-at-least-32-bytes-long!!";
@@ -53,14 +55,38 @@ test("Apple: 別アプリ向け・期限切れ・発行者違い・nonce違い�
   const opts = { clientId: "com.example.shadowing", fetchJwks, nowSec: NOW };
   const cases: Array<[string, Promise<string>, object?]> = [
     ["aud", sign({ ...base, aud: "com.other.app" })],
-    ["exp", sign({ ...base, exp: NOW - 1 })],
+    ["exp", sign({ ...base, exp: NOW - 61 })],
     ["iss", sign({ ...base, iss: "https://evil.example" })],
     ["nonce", sign({ ...base, nonce: await sha256Hex("a") }), { nonce: "b" }],
     ["kid", sign(base, "unknown")],
   ];
   for (const [name, token, extra] of cases) {
-    await assert.rejects(verifyAppleIdentityToken(await token, { ...opts, ...extra }), AppleTokenError, name);
+    await assert.rejects(verifyAppleIdentityToken(await token, { ...opts, ...extra }), IdTokenError, name);
   }
+});
+
+test("Google: 両方の表記の発行者を受け付け、未確認のメールは記録しない", async () => {
+  const { sign, fetchJwks } = await appleFixture();
+  const base = { aud: "ios-client.apps.googleusercontent.com", sub: "g-123", exp: NOW + 600 };
+  const opts = { clientIds: ["web-client", "ios-client.apps.googleusercontent.com"], fetchJwks, nowSec: NOW };
+  for (const iss of ["https://accounts.google.com", "accounts.google.com"]) {
+    const r = await verifyGoogleIdToken(await sign({ ...base, iss, email: "a@gmail.com", email_verified: true }), opts);
+    assert.deepEqual(r, { sub: "g-123", email: "a@gmail.com" });
+  }
+  const unverified = await verifyGoogleIdToken(
+    await sign({ ...base, iss: "accounts.google.com", email: "a@gmail.com", email_verified: false }),
+    opts,
+  );
+  assert.equal(unverified.email, null);
+  await assert.rejects(
+    verifyGoogleIdToken(await sign({ ...base, iss: "https://appleid.apple.com" }), opts),
+    IdTokenError,
+  );
+  // Google は nonce を生のまま入れる
+  await assert.rejects(
+    verifyGoogleIdToken(await sign({ ...base, iss: "accounts.google.com", nonce: "n1" }), { ...opts, nonce: "n2" }),
+    IdTokenError,
+  );
 });
 
 test("Apple: client_secret は ES256 で署名され、公開鍵で検証できる", async () => {

@@ -9,10 +9,11 @@
  * これを行うよう求めている。キー（APPLE_TEAM_ID / APPLE_KEY_ID / APPLE_PRIVATE_KEY）が
  * 未設定なら交換・失効はせず、サインインだけを行う。
  */
-import { decodeJwt, sha256Hex, signEs256, verifyRs256 } from "./jwt.ts";
+import { sha256Hex, signEs256 } from "./jwt.ts";
+import { cachedJwks, verifyIdToken, type JwksFetcher } from "./oidc.ts";
 
 const APPLE_ISSUER = "https://appleid.apple.com";
-const JWKS_URL = "https://appleid.apple.com/auth/keys";
+const appleJwks = cachedJwks("https://appleid.apple.com/auth/keys");
 
 export interface AppleConfig {
   /** iOSアプリの Bundle ID（identity token の aud） */
@@ -23,16 +24,6 @@ export interface AppleConfig {
   privateKey?: string;
 }
 
-export type JwksFetcher = () => Promise<{ keys: Array<JsonWebKey & { kid?: string }> }>;
-
-export const fetchAppleJwks: JwksFetcher = async () => {
-  const res = await fetch(JWKS_URL, { signal: AbortSignal.timeout(5000) });
-  if (!res.ok) throw new Error(`Apple JWKS: ${res.status}`);
-  return res.json();
-};
-
-export class AppleTokenError extends Error {}
-
 /**
  * identity token を検証して sub を返す。
  * nonce を渡した場合、トークンの nonce（iOS側で SHA-256 したもの）と一致するかも確かめる
@@ -42,27 +33,15 @@ export async function verifyAppleIdentityToken(
   token: string,
   opts: { clientId: string; nonce?: string; fetchJwks?: JwksFetcher; nowSec?: number },
 ): Promise<{ sub: string; email: string | null }> {
-  const jwt = decodeJwt(token);
-  if (!jwt || jwt.header.alg !== "RS256" || !jwt.header.kid) {
-    throw new AppleTokenError("identity token の形式が不正です");
-  }
-  const { keys } = await (opts.fetchJwks ?? fetchAppleJwks)();
-  const jwk = keys.find((k) => k.kid === jwt.header.kid);
-  if (!jwk || !(await verifyRs256(jwt, jwk))) {
-    throw new AppleTokenError("identity token の署名を検証できません");
-  }
-
-  const p = jwt.payload;
-  const now = opts.nowSec ?? Math.floor(Date.now() / 1000);
-  if (p.iss !== APPLE_ISSUER) throw new AppleTokenError("発行者が Apple ではありません");
-  const aud = Array.isArray(p.aud) ? p.aud : [p.aud];
-  if (!aud.includes(opts.clientId)) throw new AppleTokenError("このアプリ向けのトークンではありません");
-  if (typeof p.exp !== "number" || p.exp <= now) throw new AppleTokenError("identity token の期限切れです");
-  if (typeof p.sub !== "string" || !p.sub) throw new AppleTokenError("sub がありません");
-  if (opts.nonce !== undefined && p.nonce !== (await sha256Hex(opts.nonce))) {
-    throw new AppleTokenError("nonce が一致しません");
-  }
-  return { sub: p.sub, email: typeof p.email === "string" ? p.email : null };
+  const p = await verifyIdToken(token, {
+    issuers: [APPLE_ISSUER],
+    audiences: [opts.clientId],
+    fetchJwks: opts.fetchJwks ?? appleJwks,
+    // Apple は nonce を SHA-256 した値をトークンに入れる
+    expectedNonce: opts.nonce !== undefined ? await sha256Hex(opts.nonce) : undefined,
+    nowSec: opts.nowSec,
+  });
+  return { sub: String(p.sub), email: typeof p.email === "string" ? p.email : null };
 }
 
 function canCallAppleApi(c: AppleConfig): c is Required<AppleConfig> {

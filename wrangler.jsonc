@@ -30,11 +30,18 @@
   "ratelimits": [
     { "name": "AUTH_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } }
   ],
+  // メールのワンタイムコードの送信。送信元ドメインは `wrangler email sending enable <domain>` で有効にする
+  "send_email": [{ "name": "EMAIL" }],
   "vars": {
-    "MIN_IOS_APP_VERSION": "1.0.0"
+    "MIN_IOS_APP_VERSION": "1.0.0",
+    // パスキー: 本番のドメインに置き換える。iOS の Associated Domains（webcredentials:）と一致させる
+    "PASSKEY_RP_ID": "shadowing.example.com",
+    "PASSKEY_RP_NAME": "Shadowing",
+    "EMAIL_FROM": "no-reply@shadowing.example.com"
   },
   // 秘密情報は `wrangler secret put <NAME>` で入れる:
   //   AUTH_SECRET, APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY,
+  //   GOOGLE_CLIENT_IDS, AUTH_REVIEW_EMAIL, AUTH_REVIEW_CODE,
   //   CRON_SECRET, YOUTUBE_DATA_API_KEY, ANTHROPIC_API_KEY
   "observability": { "enabled": true }
 }

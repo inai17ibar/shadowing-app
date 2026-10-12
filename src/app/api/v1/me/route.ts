@@ -50,13 +50,15 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   return handle(async () => {
     const user = await requireUser(request);
+    const store = getStore();
     // Sign in with Apple の連携を Apple 側でも失効させる（Apple の要件）。失敗しても削除は進める
-    if (user.appleRefreshToken) {
-      await revokeAppleToken(appleConfig(), user.appleRefreshToken).catch((err) =>
+    const apple = (await store.listIdentities(user.id)).find((i) => i.provider === "apple");
+    if (apple?.providerRefreshToken) {
+      await revokeAppleToken(appleConfig(), apple.providerRefreshToken).catch((err) =>
         console.error("[me] apple revoke", err),
       );
     }
-    await getStore().deleteUser(user.id);
+    await store.deleteUser(user.id);
     return new Response(null, { status: 204 });
   });
 }

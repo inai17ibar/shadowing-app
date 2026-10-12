@@ -9,13 +9,57 @@
 -- 認証
 -- ---------------------------------------------------------------------------
 CREATE TABLE users (
-  id                  TEXT     PRIMARY KEY,
-  is_anonymous        INTEGER  NOT NULL DEFAULT 1,
-  -- Sign in with Apple の利用者ID（identity token の sub）
-  apple_sub           TEXT     UNIQUE,
-  -- 退会時に Apple のトークンを失効させるために保持する（Apple の要件）
-  apple_refresh_token TEXT,
-  created_at          TEXT     NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  id            TEXT     PRIMARY KEY,
+  -- 1 = ログイン方法をまだ持たない匿名アカウント
+  is_anonymous  INTEGER  NOT NULL DEFAULT 1,
+  created_at    TEXT     NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+
+-- ログイン方法（1人が複数持てる）。provider + subject がその方法での利用者ID
+--   apple:  identity token の sub
+--   google: ID token の sub
+--   email:  小文字化したメールアドレス
+CREATE TABLE user_identities (
+  provider               TEXT  NOT NULL CHECK (provider IN ('apple', 'google', 'email')),
+  subject                TEXT  NOT NULL,
+  user_id                TEXT  NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  email                  TEXT,
+  -- Apple: 退会時に連携を失効させるための refresh_token（Apple の要件）
+  provider_refresh_token TEXT,
+  created_at             TEXT  NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  PRIMARY KEY (provider, subject)
+);
+CREATE INDEX user_identities_user_idx ON user_identities (user_id);
+
+-- パスキー（WebAuthn）。id は credential ID（base64url）
+CREATE TABLE passkeys (
+  id            TEXT     PRIMARY KEY,
+  user_id       TEXT     NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  public_key    TEXT     NOT NULL,  -- COSE 公開鍵（base64url）
+  counter       INTEGER  NOT NULL DEFAULT 0,
+  transports    TEXT     NOT NULL DEFAULT '[]',  -- JSON配列
+  name          TEXT     NOT NULL DEFAULT '',
+  created_at    TEXT     NOT NULL,
+  last_used_at  TEXT
+);
+CREATE INDEX passkeys_user_idx ON passkeys (user_id);
+
+-- パスキーの登録・認証で一度だけ使うチャレンジ
+CREATE TABLE auth_challenges (
+  id          TEXT  PRIMARY KEY,
+  challenge   TEXT  NOT NULL,
+  purpose     TEXT  NOT NULL CHECK (purpose IN ('passkey_register', 'passkey_login')),
+  user_id     TEXT  REFERENCES users (id) ON DELETE CASCADE,
+  expires_at  TEXT  NOT NULL
+);
+
+-- メールのワンタイムコード。コードそのものは保存せず、鍵付きハッシュだけを持つ
+CREATE TABLE email_codes (
+  email       TEXT     PRIMARY KEY,
+  code_hash   TEXT     NOT NULL,
+  attempts    INTEGER  NOT NULL DEFAULT 0,
+  expires_at  TEXT     NOT NULL,
+  created_at  TEXT     NOT NULL
 );
 
 -- リフレッシュトークン。値そのものは保存せず SHA-256 だけを持つ
@@ -72,6 +116,7 @@ CREATE TABLE profiles (
 );
 
 -- 練習1回ぶんの記録。音声そのものは保存しない（採点は端末で行い、指標だけ送る）
+-- id は端末が作る UUID。オフラインで記録したものを再送しても二重にならない（冪等キー）
 CREATE TABLE attempts (
   id             TEXT     PRIMARY KEY,
   user_id        TEXT     NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -85,9 +130,13 @@ CREATE TABLE attempts (
   rate_ratio     REAL,
   coverage       REAL,
   duration_ms    INTEGER,
-  created_at     TEXT     NOT NULL
+  -- 練習した時刻（オフライン時は端末の時刻）。連続日数や今日の課題はこちらで数える
+  created_at     TEXT     NOT NULL,
+  -- サーバーが受け取った時刻。別の端末への同期（GET /me/attempts）はこちらの順で返す
+  received_at    TEXT     NOT NULL
 );
 CREATE INDEX attempts_user_created_idx ON attempts (user_id, created_at);
+CREATE INDEX attempts_user_received_idx ON attempts (user_id, received_at, id);
 
 -- 今取り組んでいる教材（シャドテン式に、習得するか7日経つまで同じ教材）
 CREATE TABLE assignments (

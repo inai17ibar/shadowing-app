@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createTestD1 } from "./helpers/d1.ts";
-import { createStore, type MaterialCandidate } from "../src/lib/db/store.ts";
+import { createStore, type AttemptInput, type MaterialCandidate } from "../src/lib/db/store.ts";
 
 function material(id: string, partial: Partial<MaterialCandidate> = {}): MaterialCandidate {
   return {
@@ -21,6 +21,14 @@ function material(id: string, partial: Partial<MaterialCandidate> = {}): Materia
   };
 }
 
+function attempt(partial: Partial<AttemptInput> = {}): AttemptInput {
+  return {
+    id: crypto.randomUUID(), materialId: "m1", step: "listen", sentenceIndex: null, score: null,
+    lagMs: null, rhythm: null, rateRatio: null, coverage: null, durationMs: null,
+    createdAt: "2026-10-12T00:00:00.000Z", ...partial,
+  };
+}
+
 async function setup() {
   let t = Date.parse("2026-10-12T00:00:00Z");
   // 呼ぶたびに1秒進む時計（公開日時の並び順を決めるため）
@@ -34,10 +42,7 @@ test("他人の文章・練習記録・プロフィールは見えず、消せ�
   const { store, alice, bob } = await setup();
   await store.insertMaterialCandidates([material("m1")]);
   const text = await store.insertText(alice.id, { title: "a", sourceUrl: "", sentences: ["x"] });
-  await store.insertAttempt(alice.id, {
-    materialId: "m1", step: "listen", sentenceIndex: null, score: null,
-    lagMs: null, rhythm: null, rateRatio: null, coverage: null, durationMs: null,
-  });
+  await store.insertAttempt(alice.id, attempt());
   await store.upsertProfile(alice.id, { level: "advanced" });
 
   assert.equal(await store.getText(bob.id, text.id), null);
@@ -113,14 +118,77 @@ test("リフレッシュトークンは一度しか使えず、期限切れは�
   assert.equal(await store.consumeSession("old"), null);
 });
 
-test("匿名ユーザーに Apple ID を結び付けると本登録になる", async () => {
+test("同じ id の練習記録は二重に保存されず、他人の id とは衝突として扱う", async () => {
+  const { store, alice, bob } = await setup();
+  await store.insertMaterialCandidates([material("m1")]);
+  const a = attempt({ step: "record", score: 80 });
+  assert.equal((await store.insertAttempt(alice.id, a)).status, "created");
+  const again = await store.insertAttempt(alice.id, { ...a, score: 10 });
+  assert.equal(again.status, "duplicate");
+  assert.equal(again.status === "duplicate" && again.attempt.score, 80, "再送で内容は上書きされない");
+  assert.equal((await store.insertAttempt(bob.id, a)).status, "conflict");
+  assert.equal((await store.listAttempts(alice.id)).length, 1);
+  assert.equal((await store.listAttempts(bob.id)).length, 0);
+});
+
+test("同期: 受け取った順に、カーソル以降だけを返す", async () => {
+  const { store, alice, bob } = await setup();
+  await store.insertMaterialCandidates([material("m1")]);
+  // 練習時刻（createdAt）は古い順と限らない。オフライン分は後から届く
+  for (const createdAt of ["2026-10-10T00:00:00.000Z", "2026-10-01T00:00:00.000Z", "2026-10-11T00:00:00.000Z"]) {
+    await store.insertAttempt(alice.id, attempt({ createdAt }));
+  }
+  await store.insertAttempt(bob.id, attempt());
+
+  const p1 = await store.listAttemptsReceivedAfter(alice.id, null, 2);
+  assert.deepEqual(p1.items.map((a) => a.createdAt.slice(0, 10)), ["2026-10-10", "2026-10-01"]);
+  assert.equal(p1.hasMore, true);
+  const p2 = await store.listAttemptsReceivedAfter(alice.id, p1.nextCursor, 2);
+  assert.deepEqual(p2.items.map((a) => a.createdAt.slice(0, 10)), ["2026-10-11"]);
+  assert.equal(p2.hasMore, false);
+
+  await store.insertAttempt(alice.id, attempt());
+  const p3 = await store.listAttemptsReceivedAfter(alice.id, p2.nextCursor, 10);
+  assert.equal(p3.items.length, 1, "前回以降に届いた分だけ");
+});
+
+test("匿名の記録を既存アカウントに統合すると、記録が移り匿名アカウントは消える", async () => {
   const { store, alice } = await setup();
-  assert.equal(alice.isAnonymous, true);
-  await store.linkApple(alice.id, "apple-sub-1", "rt");
-  const linked = await store.findUserByAppleSub("apple-sub-1");
-  assert.equal(linked?.id, alice.id);
-  assert.equal(linked?.isAnonymous, false);
-  assert.equal(linked?.appleRefreshToken, "rt");
+  await store.insertMaterialCandidates([material("m1")]);
+  const registered = await store.createUser({ anonymous: false });
+  await store.upsertProfile(registered.id, { level: "advanced" });
+  await store.upsertProfile(alice.id, { level: "beginner" });
+  await store.setAssignment(alice.id, { materialId: "m1", startedOn: "2026-10-12" });
+  await store.insertAttempt(alice.id, attempt());
+  await store.insertText(alice.id, { title: "a", sourceUrl: "", sentences: ["x"] });
+  await store.createSession(alice.id, "anon-session", "2027-01-01T00:00:00Z");
+
+  await store.mergeAnonymousUser(alice.id, registered.id);
+
+  assert.equal(await store.getUser(alice.id), null);
+  assert.equal((await store.listAttempts(registered.id)).length, 1);
+  assert.equal((await store.listTexts(registered.id)).length, 1);
+  assert.equal((await store.getProfile(registered.id))?.level, "advanced", "本登録側の設定を優先");
+  assert.equal((await store.getAssignment(registered.id))?.materialId, "m1", "移し先に無ければ引き継ぐ");
+  assert.equal(await store.consumeSession("anon-session"), null);
+});
+
+test("本登録アカウントは統合の移し元にできない", async () => {
+  const { store } = await setup();
+  const a = await store.createUser({ anonymous: false });
+  const b = await store.createUser({ anonymous: false });
+  await assert.rejects(store.mergeAnonymousUser(a.id, b.id));
+});
+
+test("チャレンジは一度だけ・目的と持ち主が一致するときだけ使える", async () => {
+  const { store, alice, bob } = await setup();
+  const id = await store.createChallenge({ challenge: "c1", purpose: "passkey_register", userId: alice.id, ttlSec: 60 });
+  assert.equal(await store.consumeChallenge(id, "passkey_register", bob.id), null, "別人");
+  const id2 = await store.createChallenge({ challenge: "c2", purpose: "passkey_register", userId: alice.id, ttlSec: 60 });
+  assert.equal(await store.consumeChallenge(id2, "passkey_login", alice.id), null, "目的違い");
+  const id3 = await store.createChallenge({ challenge: "c3", purpose: "passkey_register", userId: alice.id, ttlSec: 60 });
+  assert.equal(await store.consumeChallenge(id3, "passkey_register", alice.id), "c3");
+  assert.equal(await store.consumeChallenge(id3, "passkey_register", alice.id), null, "2回目");
 });
 
 test("Web版の保存テキストを保存・取得・削除できる", async () => {

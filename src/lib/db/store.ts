@@ -60,10 +60,33 @@ export interface MaterialCandidate {
 export interface User {
   id: string;
   isAnonymous: boolean;
-  appleSub: string | null;
-  appleRefreshToken: string | null;
   createdAt: string;
 }
+
+export type Provider = "apple" | "google" | "email";
+
+export interface Identity {
+  provider: Provider;
+  subject: string;
+  userId: string;
+  email: string | null;
+  providerRefreshToken: string | null;
+  createdAt: string;
+}
+
+export interface Passkey {
+  id: string;
+  userId: string;
+  /** COSE 公開鍵（base64url） */
+  publicKey: string;
+  counter: number;
+  transports: string[];
+  name: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export type ChallengePurpose = "passkey_register" | "passkey_login";
 
 export interface Profile {
   level: Level;
@@ -73,6 +96,7 @@ export interface Profile {
 }
 
 export interface Attempt {
+  /** 端末が作る UUID（冪等キー） */
   id: string;
   materialId: string;
   step: StepId;
@@ -83,8 +107,20 @@ export interface Attempt {
   rateRatio: number | null;
   coverage: number | null;
   durationMs: number | null;
+  /** 練習した時刻（オフライン時は端末の時刻） */
   createdAt: string;
+  /** サーバーが受け取った時刻 */
+  receivedAt: string;
 }
+
+export type AttemptInput = Omit<Attempt, "receivedAt">;
+
+export type InsertAttemptResult =
+  | { status: "created"; attempt: Attempt }
+  /** 同じ id を既に受け取っている（オフラインからの再送）。保存済みの内容を返す */
+  | { status: "duplicate"; attempt: Attempt }
+  /** 同じ id が他人の記録として存在する */
+  | { status: "conflict" };
 
 export interface Assignment {
   materialId: string;
@@ -166,9 +202,31 @@ function userFromRow(r: Row): User {
   return {
     id: String(r.id),
     isAnonymous: Number(r.is_anonymous) === 1,
-    appleSub: str(r.apple_sub),
-    appleRefreshToken: str(r.apple_refresh_token),
     createdAt: String(r.created_at),
+  };
+}
+
+function identityFromRow(r: Row): Identity {
+  return {
+    provider: r.provider as Provider,
+    subject: String(r.subject),
+    userId: String(r.user_id),
+    email: str(r.email),
+    providerRefreshToken: str(r.provider_refresh_token),
+    createdAt: String(r.created_at),
+  };
+}
+
+function passkeyFromRow(r: Row): Passkey {
+  return {
+    id: String(r.id),
+    userId: String(r.user_id),
+    publicKey: String(r.public_key),
+    counter: Number(r.counter),
+    transports: json<string[]>(r.transports, []),
+    name: String(r.name),
+    createdAt: String(r.created_at),
+    lastUsedAt: str(r.last_used_at),
   };
 }
 
@@ -194,6 +252,7 @@ function attemptFromRow(r: Row): Attempt {
     coverage: num(r.coverage),
     durationMs: num(r.duration_ms),
     createdAt: String(r.created_at),
+    receivedAt: String(r.received_at),
   };
 }
 
@@ -309,11 +368,11 @@ export function createStore(db: D1Database, { now = () => new Date() } = {}) {
 
     // ----- 利用者・セッション ----------------------------------------------
 
-    async createUser({ appleSub = null }: { appleSub?: string | null } = {}): Promise<User> {
+    async createUser({ anonymous = true }: { anonymous?: boolean } = {}): Promise<User> {
       const id = crypto.randomUUID();
       await db
-        .prepare("INSERT INTO users (id, is_anonymous, apple_sub, created_at) VALUES (?, ?, ?, ?)")
-        .bind(id, appleSub ? 0 : 1, appleSub, iso())
+        .prepare("INSERT INTO users (id, is_anonymous, created_at) VALUES (?, ?, ?)")
+        .bind(id, anonymous ? 1 : 0, iso())
         .run();
       return (await this.getUser(id))!;
     },
@@ -323,21 +382,198 @@ export function createStore(db: D1Database, { now = () => new Date() } = {}) {
       return r ? userFromRow(r) : null;
     },
 
-    async findUserByAppleSub(sub: string): Promise<User | null> {
-      const r = await db.prepare("SELECT * FROM users WHERE apple_sub = ?").bind(sub).first<Row>();
-      return r ? userFromRow(r) : null;
+    /** ログイン方法を1つ以上持ったので本登録扱いにする */
+    async markRegistered(userId: string) {
+      await db.prepare("UPDATE users SET is_anonymous = 0 WHERE id = ?").bind(userId).run();
     },
 
-    /** 匿名ユーザーに Apple ID を結び付けて本登録にする（練習記録はそのまま残る） */
-    async linkApple(userId: string, appleSub: string, appleRefreshToken: string | null) {
+    // ----- ログイン方法 ------------------------------------------------------
+
+    async findIdentity(provider: Provider, subject: string): Promise<Identity | null> {
+      const r = await db
+        .prepare("SELECT * FROM user_identities WHERE provider = ? AND subject = ?")
+        .bind(provider, subject)
+        .first<Row>();
+      return r ? identityFromRow(r) : null;
+    },
+
+    async listIdentities(userId: string): Promise<Identity[]> {
+      const { results } = await db
+        .prepare("SELECT * FROM user_identities WHERE user_id = ? ORDER BY created_at ASC")
+        .bind(userId)
+        .all<Row>();
+      return results.map(identityFromRow);
+    },
+
+    async addIdentity(
+      userId: string,
+      i: { provider: Provider; subject: string; email?: string | null; providerRefreshToken?: string | null },
+    ) {
       await db
         .prepare(
-          `UPDATE users SET is_anonymous = 0, apple_sub = ?,
-                  apple_refresh_token = coalesce(?, apple_refresh_token)
-            WHERE id = ?`,
+          `INSERT INTO user_identities (provider, subject, user_id, email, provider_refresh_token, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
         )
-        .bind(appleSub, appleRefreshToken, userId)
+        .bind(i.provider, i.subject, userId, i.email ?? null, i.providerRefreshToken ?? null, iso())
         .run();
+    },
+
+    /** 再サインイン時に、メールアドレスや Apple の refresh_token が新しくなっていれば更新する */
+    async updateIdentity(
+      provider: Provider,
+      subject: string,
+      patch: { email?: string | null; providerRefreshToken?: string | null },
+    ) {
+      await db
+        .prepare(
+          `UPDATE user_identities
+              SET email = coalesce(?, email), provider_refresh_token = coalesce(?, provider_refresh_token)
+            WHERE provider = ? AND subject = ?`,
+        )
+        .bind(patch.email ?? null, patch.providerRefreshToken ?? null, provider, subject)
+        .run();
+    },
+
+    async removeIdentity(userId: string, provider: Provider): Promise<boolean> {
+      const r = await db
+        .prepare("DELETE FROM user_identities WHERE user_id = ? AND provider = ?")
+        .bind(userId, provider)
+        .run();
+      return r.meta.changes > 0;
+    },
+
+    /** ログイン方法（外部ID＋パスキー）の数。最後の1つは外させない */
+    async countLoginMethods(userId: string): Promise<number> {
+      const r = await db
+        .prepare(
+          `SELECT (SELECT count(*) FROM user_identities WHERE user_id = ?)
+                + (SELECT count(*) FROM passkeys WHERE user_id = ?) AS n`,
+        )
+        .bind(userId, userId)
+        .first<{ n: number }>();
+      return Number(r?.n ?? 0);
+    },
+
+    // ----- パスキー ----------------------------------------------------------
+
+    async addPasskey(userId: string, p: Pick<Passkey, "id" | "publicKey" | "counter" | "transports" | "name">) {
+      await db
+        .prepare(
+          `INSERT INTO passkeys (id, user_id, public_key, counter, transports, name, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(p.id, userId, p.publicKey, p.counter, JSON.stringify(p.transports), p.name, iso())
+        .run();
+    },
+
+    async getPasskey(id: string): Promise<Passkey | null> {
+      const r = await db.prepare("SELECT * FROM passkeys WHERE id = ?").bind(id).first<Row>();
+      return r ? passkeyFromRow(r) : null;
+    },
+
+    async listPasskeys(userId: string): Promise<Passkey[]> {
+      const { results } = await db
+        .prepare("SELECT * FROM passkeys WHERE user_id = ? ORDER BY created_at ASC")
+        .bind(userId)
+        .all<Row>();
+      return results.map(passkeyFromRow);
+    },
+
+    async touchPasskey(id: string, counter: number) {
+      await db
+        .prepare("UPDATE passkeys SET counter = ?, last_used_at = ? WHERE id = ?")
+        .bind(counter, iso(), id)
+        .run();
+    },
+
+    async removePasskey(userId: string, id: string): Promise<boolean> {
+      const r = await db.prepare("DELETE FROM passkeys WHERE id = ? AND user_id = ?").bind(id, userId).run();
+      return r.meta.changes > 0;
+    },
+
+    async createChallenge(c: { challenge: string; purpose: ChallengePurpose; userId: string | null; ttlSec: number }) {
+      const id = crypto.randomUUID();
+      const expiresAt = new Date(now().getTime() + c.ttlSec * 1000).toISOString();
+      await db
+        .prepare("INSERT INTO auth_challenges (id, challenge, purpose, user_id, expires_at) VALUES (?, ?, ?, ?, ?)")
+        .bind(id, c.challenge, c.purpose, c.userId, expiresAt)
+        .run();
+      return id;
+    },
+
+    /** チャレンジを使い切る。期限切れ・目的違い・別人のものなら null */
+    async consumeChallenge(id: string, purpose: ChallengePurpose, userId: string | null) {
+      const r = await db
+        .prepare("DELETE FROM auth_challenges WHERE id = ? RETURNING challenge, purpose, user_id, expires_at")
+        .bind(id)
+        .first<Row>();
+      if (!r || r.purpose !== purpose || String(r.expires_at) <= iso()) return null;
+      if ((r.user_id ?? null) !== userId) return null;
+      return String(r.challenge);
+    },
+
+    // ----- メールのワンタイムコード ---------------------------------------------
+
+    async getEmailCode(email: string) {
+      const r = await db.prepare("SELECT * FROM email_codes WHERE email = ?").bind(email).first<Row>();
+      return r
+        ? {
+            codeHash: String(r.code_hash),
+            attempts: Number(r.attempts),
+            expiresAt: String(r.expires_at),
+            createdAt: String(r.created_at),
+          }
+        : null;
+    },
+
+    /** コードを発行し直す（試行回数もリセット） */
+    async putEmailCode(email: string, codeHash: string, ttlSec: number) {
+      const expiresAt = new Date(now().getTime() + ttlSec * 1000).toISOString();
+      await db
+        .prepare(
+          `INSERT INTO email_codes (email, code_hash, attempts, expires_at, created_at) VALUES (?, ?, 0, ?, ?)
+           ON CONFLICT (email) DO UPDATE SET code_hash = excluded.code_hash, attempts = 0,
+             expires_at = excluded.expires_at, created_at = excluded.created_at`,
+        )
+        .bind(email, codeHash, expiresAt, iso())
+        .run();
+    },
+
+    async incrementEmailCodeAttempts(email: string) {
+      await db.prepare("UPDATE email_codes SET attempts = attempts + 1 WHERE email = ?").bind(email).run();
+    },
+
+    async deleteEmailCode(email: string) {
+      await db.prepare("DELETE FROM email_codes WHERE email = ?").bind(email).run();
+    },
+
+    /**
+     * 匿名アカウントの記録を、既存のアカウントに移して匿名アカウントを消す。
+     * 匿名で練習してから、以前作ったアカウントでサインインした場合に記録を失わないため。
+     *
+     * プロフィールと今の教材は、移し先に既にあればそちらを優先する（本登録側の設定を壊さない）。
+     */
+    async mergeAnonymousUser(fromId: string, toId: string) {
+      const from = await this.getUser(fromId);
+      if (!from || !from.isAnonymous) throw new Error("匿名アカウント以外は統合できません");
+      if (fromId === toId) return;
+      await db.batch([
+        db.prepare("UPDATE attempts SET user_id = ? WHERE user_id = ?").bind(toId, fromId),
+        db.prepare("UPDATE user_texts SET user_id = ? WHERE user_id = ?").bind(toId, fromId),
+        db.prepare("UPDATE reports SET user_id = ? WHERE user_id = ?").bind(toId, fromId),
+        db
+          .prepare(
+            "UPDATE profiles SET user_id = ? WHERE user_id = ? AND NOT EXISTS (SELECT 1 FROM profiles WHERE user_id = ?)",
+          )
+          .bind(toId, fromId, toId),
+        db
+          .prepare(
+            "UPDATE assignments SET user_id = ? WHERE user_id = ? AND NOT EXISTS (SELECT 1 FROM assignments WHERE user_id = ?)",
+          )
+          .bind(toId, fromId, toId),
+        // 残った行（移し先にあったプロフィール等・セッション）は CASCADE で消える
+        db.prepare("DELETE FROM users WHERE id = ? AND is_anonymous = 1").bind(fromId),
+      ]);
     },
 
     async createSession(userId: string, tokenHash: string, expiresAt: string) {
@@ -413,13 +649,25 @@ export function createStore(db: D1Database, { now = () => new Date() } = {}) {
       return results.map(attemptFromRow);
     },
 
-    async insertAttempt(userId: string, a: Omit<Attempt, "id" | "createdAt">): Promise<Attempt> {
-      const row: Attempt = { ...a, id: crypto.randomUUID(), createdAt: iso() };
-      await db
+    async getAttempt(userId: string, id: string): Promise<Attempt | null> {
+      const r = await db
+        .prepare("SELECT * FROM attempts WHERE id = ? AND user_id = ?")
+        .bind(id, userId)
+        .first<Row>();
+      return r ? attemptFromRow(r) : null;
+    },
+
+    /**
+     * 練習記録を保存する。同じ id を2回送っても1件にしかならない（オフラインからの再送対策）。
+     */
+    async insertAttempt(userId: string, a: AttemptInput): Promise<InsertAttemptResult> {
+      const row: Attempt = { ...a, receivedAt: iso() };
+      const r = await db
         .prepare(
           `INSERT INTO attempts (id, user_id, material_id, step, sentence_index, score,
-                                 lag_ms, rhythm, rate_ratio, coverage, duration_ms, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                 lag_ms, rhythm, rate_ratio, coverage, duration_ms, created_at, received_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (id) DO NOTHING`,
         )
         .bind(
           row.id,
@@ -434,9 +682,34 @@ export function createStore(db: D1Database, { now = () => new Date() } = {}) {
           row.coverage,
           row.durationMs,
           row.createdAt,
+          row.receivedAt,
         )
         .run();
-      return row;
+      if (r.meta.changes > 0) return { status: "created", attempt: row };
+      const existing = await this.getAttempt(userId, row.id);
+      return existing ? { status: "duplicate", attempt: existing } : { status: "conflict" };
+    },
+
+    /** 別の端末への同期用。サーバーが受け取った順に返す */
+    async listAttemptsReceivedAfter(userId: string, cursor: string | null, limit: number) {
+      const params: unknown[] = [userId];
+      let where = "user_id = ?";
+      if (cursor) {
+        const [receivedAt, id] = cursor.split("|");
+        where += " AND (received_at > ? OR (received_at = ? AND id > ?))";
+        params.push(receivedAt, receivedAt, id);
+      }
+      const { results } = await db
+        .prepare(`SELECT * FROM attempts WHERE ${where} ORDER BY received_at ASC, id ASC LIMIT ?`)
+        .bind(...params, limit + 1)
+        .all<Row>();
+      const items = results.slice(0, limit).map(attemptFromRow);
+      const last = items[items.length - 1];
+      return {
+        items,
+        nextCursor: last ? `${last.receivedAt}|${last.id}` : cursor,
+        hasMore: results.length > limit,
+      };
     },
 
     // ----- 割り当て --------------------------------------------------------

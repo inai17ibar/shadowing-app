@@ -1,17 +1,17 @@
-import { ApiError, handle, ok, readJson } from "@/lib/api/http";
-import { appleConfig, authSecret, getStore } from "@/lib/api/env";
+import { ApiError, handle, readJson } from "@/lib/api/http";
+import { appleConfig, getStore } from "@/lib/api/env";
 import { optionalUser, rateLimitAuth } from "@/lib/api/auth";
-import { AppleTokenError, exchangeAuthorizationCode, verifyAppleIdentityToken } from "@/lib/auth/apple";
-import { issueTokens } from "@/lib/auth/sessions";
-import type { User } from "@/lib/db/store";
+import { respondSignIn } from "@/lib/api/signin";
+import { exchangeAuthorizationCode, verifyAppleIdentityToken } from "@/lib/auth/apple";
+import { IdTokenError } from "@/lib/auth/oidc";
+import { signInWithIdentity } from "@/lib/auth/identity";
 
 /**
  * POST /api/v1/auth/apple — Sign in with Apple。
  *   { identityToken, authorizationCode?, nonce? }
  *
- * - 匿名ユーザーのトークンを付けて呼ぶと、その匿名アカウントを本登録に切り替える（練習記録を引き継ぐ）
- * - その Apple ID が既に別アカウントに結び付いていれば、そちらにサインインする
- *   （匿名側の記録は引き継がない。iOS 側で「以前のアカウントに切り替わります」と伝えること）
+ * サインイン中のトークンを付けて呼ぶと、そのアカウントのログイン方法として追加する。
+ * 結び付け・匿名記録の統合の規則は src/lib/auth/identity.ts。
  */
 export async function POST(request: Request) {
   return handle(async () => {
@@ -22,41 +22,31 @@ export async function POST(request: Request) {
     }
     const config = appleConfig();
 
-    let sub: string;
+    let claims: { sub: string; email: string | null };
     try {
-      ({ sub } = await verifyAppleIdentityToken(body.identityToken, {
+      claims = await verifyAppleIdentityToken(body.identityToken, {
         clientId: config.clientId,
         nonce: typeof body.nonce === "string" ? body.nonce : undefined,
-      }));
+      });
     } catch (err) {
-      if (err instanceof AppleTokenError) throw new ApiError("unauthorized", err.message);
+      if (err instanceof IdTokenError) throw new ApiError("unauthorized", err.message);
       throw new ApiError("upstream_error", "Apple の公開鍵を取得できませんでした");
     }
 
-    const store = getStore();
-    const appleRefreshToken =
+    // 退会時に Apple 側の連携を失効させるため、refresh_token に交換して持っておく
+    const providerRefreshToken =
       typeof body.authorizationCode === "string" && body.authorizationCode
         ? await exchangeAuthorizationCode(config, body.authorizationCode)
         : null;
 
-    const existing = await store.findUserByAppleSub(sub);
-    const current = await optionalUser(request);
-    let user: User;
-    let linked = false;
-
-    if (existing) {
-      user = existing;
-      if (appleRefreshToken) await store.linkApple(existing.id, sub, appleRefreshToken);
-    } else if (current?.isAnonymous) {
-      await store.linkApple(current.id, sub, appleRefreshToken);
-      user = (await store.getUser(current.id))!;
-      linked = true;
-    } else {
-      user = await store.createUser({ appleSub: sub });
-      if (appleRefreshToken) await store.linkApple(user.id, sub, appleRefreshToken);
-    }
-
-    const tokens = await issueTokens(store, authSecret(), user);
-    return ok({ ...tokens, linkedAnonymousAccount: linked });
+    return respondSignIn(
+      await signInWithIdentity(getStore(), {
+        provider: "apple",
+        subject: claims.sub,
+        email: claims.email,
+        providerRefreshToken,
+        current: await optionalUser(request),
+      }),
+    );
   });
 }

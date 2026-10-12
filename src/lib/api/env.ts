@@ -36,3 +36,23 @@ export function appleConfig() {
     privateKey: env.APPLE_PRIVATE_KEY,
   };
 }
+
+/** Google ログインで受け付ける OAuth クライアントID（iOS 用・Web 用などをカンマ区切りで） */
+export function googleClientIds(): string[] {
+  const ids = (getEnv().GOOGLE_CLIENT_IDS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (ids.length === 0) throw new ApiError("not_configured", "GOOGLE_CLIENT_IDS が設定されていません");
+  return ids;
+}
+
+export function passkeyConfig() {
+  const env = getEnv();
+  if (!env.PASSKEY_RP_ID) throw new ApiError("not_configured", "PASSKEY_RP_ID が設定されていません");
+  return {
+    rpId: env.PASSKEY_RP_ID,
+    rpName: env.PASSKEY_RP_NAME ?? "Shadowing",
+    origins: (env.PASSKEY_ORIGINS ?? `https://${env.PASSKEY_RP_ID}`)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  };
+}
