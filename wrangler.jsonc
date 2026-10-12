@@ -22,7 +22,7 @@
     {
       "binding": "DB",
       "database_name": "shadowing-app",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "2e9cb3fd-8acb-469e-87c7-09472304efb5",
       "migrations_dir": "migrations"
     }
   ],
@@ -34,10 +34,11 @@
   "send_email": [{ "name": "EMAIL" }],
   "vars": {
     "MIN_IOS_APP_VERSION": "1.0.0",
-    // パスキー: 本番のドメインに置き換える。iOS の Associated Domains（webcredentials:）と一致させる
-    "PASSKEY_RP_ID": "shadowing.example.com",
+    // パスキー: 今は workers.dev。独自ドメインにしたら置き換える。iOS の Associated Domains（webcredentials:）と一致させる
+    "PASSKEY_RP_ID": "shadowing-app.inai17ibar.workers.dev",
     "PASSKEY_RP_NAME": "Shadowing",
-    "EMAIL_FROM": "no-reply@shadowing.example.com"
+    // 空のあいだはメールのコードでのログインを出さない。送信元ドメインを有効にしたら、そのドメインのアドレスにする
+    "EMAIL_FROM": ""
   },
   // 秘密情報は `wrangler secret put <NAME>` で入れる:
   //   AUTH_SECRET, APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY,
