@@ -53,3 +53,93 @@ Aは将来「たまに詳しく見る」有料側に置く余地を残す（無�
 - YouTubeモードは埋め込みiframeから音声を取れないため、同じ包絡を**字幕のタイムスタンプ**から作る。
   字幕テキストと時刻の取得はブラウザ拡張側（ShadowFeed）の担当になる。
 - 測れるのは「重なり」であって「音素の正確さ」ではない。ユーザーにそう説明する必要がある。
+
+## ADR-002: iOSアプリ向けに `/api/v1` を切り出す
+
+- **日付**: 2026-10-12
+- **状態**: 提案
+- **決定者**: inatani
+
+### コンテキスト
+
+iOSアプリを出すにあたり、既存の `/api/*` はWeb画面の都合に合わせた形で、認証がなく、
+保存した文章（`saved_texts`）は全員で共有されていた。ネイティブアプリから使うには、
+利用者ごとのデータ・バージョン管理・機械的に扱えるエラー形式が要る。
+
+### 決定
+
+- `/api/v1` を新設し、既存の `/api/*`（Web版）は触らない。契約は `docs/openapi.yaml`。
+- 認証は Bearer トークン。Sign in with Apple と匿名サインインを使い、
+  ログインしなくても練習を始められるようにする（実装は ADR-004）。
+- **音声はサーバーに送らない。** 端末でエネルギー包絡（10ms刻み）を作って送り、点数はサーバーが
+  `overlap.ts` と同じ式で出す（`scoreMetrics` を切り出し、指標だけ送る経路も用意）。
+- 練習の流れはシャドテンの学習サイクル（1教材を約1週間・6ステップ・毎日の本番録音）を踏襲し、
+  人の添削の代わりに「重なり」の即時採点と弱い文の提示で回す（`src/lib/practice-plan.ts`）。
+- 実行環境は **Cloudflare Workers**（OpenNext アダプタ `@opennextjs/cloudflare`）。
+  定期収集は Cron Trigger から `worker.ts` の `scheduled` を経てルートハンドラを呼ぶ。
+
+### 影響
+
+- **iOSではお手本の波形が手に入る。** `AVSpeechSynthesizer.write(_:toBufferCallback:)` で読み上げ音声を
+  バッファとして受け取れるので、ADR-001 の「boundary イベントから包絡を推定する」回避策が要らず、
+  `computeEnvelope` と同じ計算を実音声に対して行える。iOS側の採点精度はWebより上がる見込み。
+- OpenNext の対応範囲に合わせるため Next.js を 16.3.8 に上げた（アダプタ 1.20 の peer 要件）。
+  Node ランタイムの Middleware は未対応なので使わない。
+
+## ADR-003: カタログ教材は「出典とライセンスが確認できるもの」だけにする
+
+- **日付**: 2026-10-12
+- **状態**: 提案
+- **決定者**: inatani
+
+### コンテキスト
+
+App Store 審査（5.2 知的財産）と有料配信の両方を満たす必要がある。既存ライブラリには出典が曖昧なもの
+（「TED-style」など）があり、Web版の URL 取り込みやYouTube字幕取得は、そのままでは iOS で配信できない。
+
+### 決定
+
+- 共有カタログの教材は全件 `license` と `source_url` を持ち、`content-policy.ts` の判定を通ったものだけ公開する。
+  NC・ND・不明は公開不可（DBの CHECK 制約でも強制）。
+- 自社オリジナル以外は自動公開せず、`pending_review` を経て人が公開する。
+- 利用者が取り込んだ文章は本人専用とし、カタログに混ぜない。
+- 詳細と配信元の一覧は `docs/content-collection.md`。
+
+### 影響
+
+- 既存ライブラリ8本は、出典確定か書き直しまで iOS カタログに出せない。
+- VOA Learning English は 2025年3月以降更新が止まっているため、定期収集ではなくアーカイブのバックフィルに使う。
+  定期収集の主な配信元は NASA などの米国政府機関と、自社オリジナル生成。
+
+## ADR-004: Supabase をやめ、D1 と自前の認証にする
+
+- **日付**: 2026-10-12
+- **状態**: 提案
+- **決定者**: inatani
+
+### コンテキスト
+
+実行環境を Cloudflare Workers にしたので、DB と認証も Cloudflare に寄せたい。
+ただし Cloudflare には一般利用者向けの認証サービスが無い（Cloudflare Access は社内向けのゼロトラスト製品）。
+
+### 決定
+
+- **DB は D1**（`migrations/`）。スキーマは Postgres 版をそのまま SQLite に移した。
+- **認証は自前**（`src/lib/auth/`）。外部ライブラリは使わず Web Crypto だけで書く。
+  - 匿名サインイン（`POST /auth/anonymous`）と Sign in with Apple（`POST /auth/apple`）だけを提供する。
+    パスワードは扱わない（漏えい・リセットの仕組みを持たずに済む）。
+  - アクセストークンは HS256 の JWT（1時間）、リフレッシュトークンは使い捨て（90日、DB には SHA-256 のみ）。
+  - Apple の identity token は Apple の公開鍵(JWKS)で署名・iss・aud・exp・nonce を検証する。
+  - 退会時は Apple の `/auth/revoke` で連携も失効させる（Apple の要件）。そのため authorizationCode を
+    refresh_token と交換して保持する。
+  - 認証エンドポイントは Workers Rate Limiting で 1IP あたり毎分20回に制限する。
+
+### 影響
+
+- **RLS が無い。** 利用者のデータを触るのは `src/lib/db/store.ts` だけにし、すべての SQL に `user_id = ?` を入れる。
+  他人の行が見えないことは `test/store.test.ts` で確かめている。新しいテーブルを足すときも同じ規則に従うこと。
+- 認証の不具合は自分たちの責任になる。`test/auth.test.ts` で署名の改ざん・期限切れ・別アプリ向けトークン・
+  nonce 違いを拒否することを確かめているが、ローンチ前に第三者のレビューを受けたい。
+- メールやGoogleでのログインを足したくなったら、そのときに認証サービスの導入を再検討する
+  （他社ログインを足すなら Guideline 4.8 により Sign in with Apple の併設が必要。今は Apple のみなので問題ない）。
+- テストは Node 標準の `node:sqlite` を D1 の形に包んで、マイグレーションを流した DB に対して行う（`test/helpers/d1.ts`）。

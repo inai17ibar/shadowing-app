@@ -1,0 +1,4 @@
+NEXTJS_ENV=development
+AUTH_SECRET=dev-secret-please-change-0123456789abcdef
+APPLE_CLIENT_ID=com.example.shadowing
+CRON_SECRET=dev-cron-secret

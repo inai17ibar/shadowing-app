@@ -180,12 +180,18 @@ function rateScore(rateRatio: number): number {
 }
 
 /**
- * 指標をまとめて 0..100 の点数と日本語のひとことにする。
+ * 2つの包絡を比べ、0..100 の点数と日本語のひとことにする。
  * リズムを主、カバー率を従、話速を補正として扱う。
  */
 export function scoreOverlap(reference: Envelope, user: Envelope): OverlapResult {
-  const metrics = alignmentMetrics(reference, user)
+  return scoreMetrics(alignmentMetrics(reference, user))
+}
 
+/**
+ * 指標だけから点数を出す。iOS側で包絡の比較まで済ませ、指標だけを送ってくる場合に使う
+ * （点数の式はサーバーとWebで1か所に保つ）。
+ */
+export function scoreMetrics(metrics: OverlapMetrics): OverlapResult {
   if (metrics.coverage === 0 && metrics.rhythm === 0) {
     return {
       ...metrics,
