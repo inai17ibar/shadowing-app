@@ -25,7 +25,7 @@ function Practice() {
     return (
       <div className="max-w-3xl mx-auto px-4 py-10 text-sm text-gray-600">
         練習する教材が指定されていません。
-        <Link href="/today" className="text-[var(--brand-from)] hover:underline ml-1">
+        <Link href="/today" className="text-blue-500 hover:underline ml-1">
           今日の課題へ
         </Link>
       </div>

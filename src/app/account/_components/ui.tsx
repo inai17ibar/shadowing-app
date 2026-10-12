@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 
 export function Section({ title, description, children }: { title: string; description?: ReactNode; children: ReactNode }) {
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-bold text-gray-900">{title}</h2>
+    <section className="rounded-2xl bg-surface p-6 shadow-card">
+      <h2 className="text-[19px] font-semibold text-gray-900">{title}</h2>
       {description && <div className="mt-1 text-sm text-gray-500 leading-relaxed">{description}</div>}
       <div className="mt-4">{children}</div>
     </section>
@@ -15,10 +15,9 @@ export function Section({ title, description, children }: { title: string; descr
 type Variant = "primary" | "secondary" | "danger";
 
 const VARIANTS: Record<Variant, string> = {
-  primary:
-    "bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white hover:opacity-90 disabled:opacity-50",
-  secondary: "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50",
-  danger: "bg-red-600 text-white hover:bg-red-700 disabled:opacity-50",
+  primary: "bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-40",
+  secondary: "bg-gray-100 text-blue-500 hover:bg-gray-200 disabled:opacity-40",
+  danger: "bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-40",
 };
 
 export function Button({
@@ -30,26 +29,27 @@ export function Button({
     <button
       type="button"
       {...props}
-      className={`rounded-lg px-4 py-2 text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-from)] focus-visible:ring-offset-2 disabled:cursor-not-allowed ${VARIANTS[variant]} ${className}`}
+      className={`rounded-full px-4 py-2 text-[15px] font-medium transition-all active:scale-[0.98] disabled:cursor-not-allowed ${VARIANTS[variant]} ${className}`}
     />
   );
 }
 
+/** iOS の入力欄（グレーの塗り・枠線なし。入力中だけ青いリング） */
 export const inputClass =
-  "rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-[var(--brand-from)] focus:outline-none focus:ring-2 focus:ring-[var(--brand-from)]/30";
+  "rounded-xl border-0 bg-gray-100 px-3.5 py-2.5 text-[15px] text-gray-900 placeholder:text-gray-400 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/60";
 
 export type NoticeState = { kind: "info" | "success" | "error"; text: string } | null;
 
 const NOTICE_STYLES = {
-  info: "bg-blue-50 text-blue-800 border-blue-200",
-  success: "bg-green-50 text-green-800 border-green-200",
-  error: "bg-red-50 text-red-800 border-red-200",
+  info: "bg-blue-50 text-blue-800",
+  success: "bg-green-50 text-green-800",
+  error: "bg-red-50 text-red-800",
 };
 
 export function Notice({ notice }: { notice: NoticeState }) {
   if (!notice) return null;
   return (
-    <p role={notice.kind === "error" ? "alert" : "status"} className={`mt-3 rounded-lg border px-3 py-2 text-sm ${NOTICE_STYLES[notice.kind]}`}>
+    <p role={notice.kind === "error" ? "alert" : "status"} className={`mt-3 rounded-xl px-4 py-2.5 text-sm ${NOTICE_STYLES[notice.kind]}`}>
       {notice.text}
     </p>
   );

@@ -110,7 +110,7 @@ export default function AccountClient() {
 function Page({ children }: { children: React.ReactNode }) {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10 space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">アカウント</h1>
+      <h1 className="text-[32px] leading-tight font-bold tracking-tight text-gray-900 text-gray-900">アカウント</h1>
       {children}
     </div>
   );
@@ -118,7 +118,7 @@ function Page({ children }: { children: React.ReactNode }) {
 
 function Status({ user }: { user: SessionUser }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200 bg-white px-6 py-4 shadow-sm">
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-surface shadow-card px-6 py-4">
       <span
         className={`rounded-full px-3 py-1 text-xs font-semibold ${
           user.isAnonymous ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-800"
@@ -258,7 +258,7 @@ function ProfileForm({ profile, onSaved }: { profile: Profile; onSaved: (u: Sess
             className={inputClass}
           />
           {browserTz && browserTz !== timeZone && (
-            <button type="button" className="text-left text-xs text-[var(--brand-from)] hover:underline" onClick={() => setTimeZone(browserTz)}>
+            <button type="button" className="text-left text-xs text-blue-500 hover:underline" onClick={() => setTimeZone(browserTz)}>
               このブラウザの設定（{browserTz}）にする
             </button>
           )}

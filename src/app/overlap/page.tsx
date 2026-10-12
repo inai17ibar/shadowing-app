@@ -153,7 +153,7 @@ export default function OverlapPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold mb-1">重なり採点（検証中）</h1>
+      <h1 className="text-[32px] leading-tight font-bold tracking-tight text-gray-900 mb-1">重なり採点（検証中）</h1>
       <p className="text-sm text-gray-500 mb-8">
         読み上げに声を重ねてください。認識した単語ではなく、
         <strong>追いつけているか・リズムが合っているか</strong>を測ります。
@@ -165,7 +165,7 @@ export default function OverlapPage() {
         onChange={(e) => setText(e.target.value)}
         rows={3}
         disabled={phase === "running" || phase === "scoring"}
-        className="w-full rounded-lg border border-gray-300 p-3 text-sm mb-3 disabled:bg-gray-50"
+        className="w-full rounded-lg border-0 bg-gray-100 p-3 text-sm mb-3 disabled:bg-gray-50"
       />
       <div className="flex flex-wrap gap-2 mb-6">
         {SAMPLES.map((s, i) => (
@@ -173,7 +173,7 @@ export default function OverlapPage() {
             key={i}
             onClick={() => setText(s)}
             disabled={phase === "running" || phase === "scoring"}
-            className="text-xs px-3 py-1 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+            className="text-xs px-3 py-1 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40"
           >
             例文 {i + 1}
           </button>
@@ -183,7 +183,7 @@ export default function OverlapPage() {
       <button
         onClick={run}
         disabled={phase === "running" || phase === "scoring" || text.trim().length === 0}
-        className="px-6 py-3 rounded-lg bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white font-semibold disabled:opacity-50"
+        className="px-6 py-3 rounded-full bg-blue-500 text-white font-semibold disabled:opacity-50"
       >
         {phase === "running"
           ? "読み上げ中… 声を重ねてください"

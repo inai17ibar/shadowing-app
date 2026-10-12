@@ -44,7 +44,7 @@ export default function TodayPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">今日の課題</h1>
+      <h1 className="text-[32px] leading-tight font-bold tracking-tight text-gray-900 mb-2">今日の課題</h1>
       <p className="text-gray-500 text-sm mb-6">
         同じ教材を、習得するか7日経つまで毎日6ステップで練習します。
       </p>
@@ -57,10 +57,10 @@ export default function TodayPage() {
           <Notice>{today.message}</Notice>
           <p className="text-sm text-gray-600">連続 {today.streak} 日</p>
           <div className="flex gap-3 text-sm">
-            <Link href="/texts" className="text-[var(--brand-from)] hover:underline">
+            <Link href="/texts" className="text-blue-500 hover:underline">
               自分の文章を取り込む →
             </Link>
-            <Link href="/catalog" className="text-[var(--brand-from)] hover:underline">
+            <Link href="/catalog" className="text-blue-500 hover:underline">
               教材を見る →
             </Link>
           </div>
@@ -107,7 +107,7 @@ export default function TodayPage() {
                   </span>
                   <Link
                     href={practiceHref(today.materialId, s.id)}
-                    className={`flex-1 text-sm hover:text-[var(--brand-from)] ${
+                    className={`flex-1 text-sm hover:text-blue-500 ${
                       s.id === today.nextStep ? "font-semibold text-gray-900" : "text-gray-700"
                     }`}
                   >
@@ -154,7 +154,7 @@ export default function TodayPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3 text-center">
+    <div className="rounded-2xl bg-surface shadow-card p-3 text-center">
       <div className="text-xs text-gray-500">{label}</div>
       <div className="text-lg font-semibold tabular-nums">{value}</div>
     </div>

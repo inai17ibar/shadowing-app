@@ -51,7 +51,7 @@ export default function CatalogDetailPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
-      <Link href="/catalog" className="text-sm text-gray-500 hover:text-[var(--brand-from)]">
+      <Link href="/catalog" className="text-sm text-gray-500 hover:text-blue-500">
         ← 教材一覧
       </Link>
       {error && (
@@ -70,7 +70,7 @@ export default function CatalogDetailPage() {
               </span>
             ))}
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">{material.title}</h1>
+          <h1 className="text-[32px] leading-tight font-bold tracking-tight text-gray-900 mb-2">{material.title}</h1>
           {material.description && <p className="text-gray-500 text-sm mb-4">{material.description}</p>}
 
           <dl className="text-xs text-gray-500 space-y-1 mb-6">
@@ -166,7 +166,7 @@ function ReportForm({ materialId }: { materialId: string }) {
         <select
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          className="mt-1 block w-full rounded-md border border-gray-300 px-2 py-2 text-sm"
+          className="mt-1 block w-full rounded-xl border-0 bg-gray-100 px-2 py-2 text-[15px] focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/60"
         >
           {REASONS.map((r) => (
             <option key={r.value} value={r.value}>
@@ -182,7 +182,7 @@ function ReportForm({ materialId }: { materialId: string }) {
           onChange={(e) => setDetail(e.target.value)}
           maxLength={2000}
           rows={3}
-          className="mt-1 block w-full rounded-md border border-gray-300 p-2 text-sm"
+          className="mt-1 block w-full rounded-xl border-0 bg-gray-100 p-2 text-[15px] focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/60"
         />
       </label>
       {error && <ErrorBox message={error} />}

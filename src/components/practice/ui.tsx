@@ -12,7 +12,7 @@ export const LEVEL_LABELS: Record<Level, string> = {
 export const LEVEL_COLORS: Record<Level, string> = {
   beginner: "bg-green-100 text-green-700",
   intermediate: "bg-blue-100 text-blue-700",
-  advanced: "bg-purple-100 text-purple-700",
+  advanced: "bg-amber-100 text-amber-700",
 };
 
 export const STEP_LABELS: Record<string, string> = {
@@ -33,28 +33,38 @@ export function LevelBadge({ level }: { level: Level }) {
 }
 
 export function Loading({ label = "読み込み中…" }: { label?: string }) {
-  return <p className="text-sm text-gray-400 py-10 text-center">{label}</p>;
+  return (
+    <p className="flex items-center justify-center gap-2 py-12 text-sm text-gray-500">
+      <span className="size-4 animate-spin rounded-full border-2 border-gray-300 border-t-gray-500" aria-hidden />
+      {label}
+    </p>
+  );
 }
 
 export function ErrorBox({ message }: { message: string }) {
   return (
-    <p role="alert" className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+    <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
       {message}
     </p>
   );
 }
 
 export function Notice({ children }: { children: React.ReactNode }) {
-  return <p className="rounded-lg bg-purple-50 border border-purple-100 p-3 text-sm text-gray-700">{children}</p>;
+  return <p className="rounded-xl bg-blue-50 px-4 py-3 text-sm text-gray-800">{children}</p>;
 }
 
+/** Apple の塗りつぶしボタン（青・角丸いっぱい） */
 export const primaryButton =
-  "inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white text-sm font-semibold shadow-sm hover:opacity-95 disabled:opacity-50 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-from)] focus-visible:ring-offset-2";
+  "inline-flex items-center justify-center gap-1.5 rounded-full bg-blue-500 px-5 py-2.5 text-[15px] font-medium text-white transition-colors hover:bg-blue-600 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none";
 
+/** Apple のグレーのボタン（青い文字） */
 export const secondaryButton =
-  "inline-flex items-center justify-center px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-from)]";
+  "inline-flex items-center justify-center gap-1.5 rounded-full bg-gray-100 px-4 py-2 text-[15px] font-medium text-blue-500 transition-colors hover:bg-gray-200 active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none";
 
-export const card = "rounded-xl border border-gray-200 bg-white p-5 shadow-sm";
+export const card = "rounded-2xl bg-surface p-5 shadow-card";
+
+/** 大見出し（iOS の Large Title） */
+export const pageTitle = "text-[32px] leading-tight font-bold tracking-tight text-gray-900";
 
 /** 「今日 10/12(月) 19:30」のような表示 */
 export function formatDateTime(iso: string) {

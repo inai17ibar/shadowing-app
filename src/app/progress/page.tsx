@@ -76,7 +76,7 @@ export default function ProgressPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">記録</h1>
+      <h1 className="text-[32px] leading-tight font-bold tracking-tight text-gray-900 mb-6">記録</h1>
       {error && <ErrorBox message={error} />}
       {!error && !progress && <Loading />}
       {pending > 0 && (
@@ -98,7 +98,7 @@ export default function ProgressPage() {
               <select
                 value={days}
                 onChange={(e) => setDays(Number(e.target.value))}
-                className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+                className="rounded-xl border-0 bg-gray-100 px-2 py-1 text-[15px] focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/60"
                 aria-label="期間"
               >
                 <option value={7}>7日</option>
@@ -115,7 +115,7 @@ export default function ProgressPage() {
                   title={`${h.date}: ${h.attempts}回${h.bestRecordScore !== null ? ` / 本番 ${h.bestRecordScore}点` : ""}`}
                 >
                   <div
-                    className={`w-full rounded-t ${h.attempts > 0 ? "bg-[var(--brand-from)]" : "bg-gray-100"}`}
+                    className={`w-full rounded-t ${h.attempts > 0 ? "bg-blue-500" : "bg-gray-100"}`}
                     style={{ height: `${Math.max(4, (h.attempts / maxAttempts) * 100)}%` }}
                   />
                 </div>
@@ -160,7 +160,7 @@ export default function ProgressPage() {
                   </span>
                   <Link
                     href={practiceHref(a.materialId)}
-                    className="flex-1 min-w-0 truncate text-xs text-gray-500 hover:text-[var(--brand-from)]"
+                    className="flex-1 min-w-0 truncate text-xs text-gray-500 hover:text-blue-500"
                   >
                     {a.materialId.startsWith("text:") ? "自分の文章" : a.materialId}
                   </Link>
@@ -179,7 +179,7 @@ export default function ProgressPage() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-3 text-center">
+    <div className="rounded-2xl bg-surface shadow-card p-3 text-center">
       <div className="text-xs text-gray-500">{label}</div>
       <div className="text-lg font-semibold tabular-nums">{value}</div>
     </div>

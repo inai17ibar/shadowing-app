@@ -51,7 +51,7 @@ export default function CatalogPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">教材</h1>
+      <h1 className="text-[32px] leading-tight font-bold tracking-tight text-gray-900 mb-2">教材</h1>
       <p className="text-gray-500 text-sm mb-6">出典とライセンスを確認できた教材です。好きなものを選んで練習できます。</p>
 
       <div className="flex gap-2 mb-3 flex-wrap">
@@ -61,7 +61,7 @@ export default function CatalogPage() {
             onClick={() => setLevel(l)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               level === l
-                ? "bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white"
+                ? "bg-blue-500 text-white"
                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
             }`}
           >
@@ -83,7 +83,7 @@ export default function CatalogPage() {
               <button
                 key={t}
                 onClick={() => setTag(t)}
-                className="text-xs px-3 py-1 rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50"
+                className="text-xs px-3 py-1 rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200"
               >
                 #{t}
               </button>
@@ -98,13 +98,13 @@ export default function CatalogPage() {
           <Link
             key={m.id}
             href={`/catalog/${encodeURIComponent(m.id)}`}
-            className="group block rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5"
+            className="group block rounded-2xl bg-surface shadow-card p-5 transition-all duration-200 hover:shadow-float hover:-translate-y-0.5"
           >
             <div className="flex items-center gap-2 mb-1">
               <LevelBadge level={m.level} />
               <span className="text-xs text-gray-400">{m.sourceName}</span>
             </div>
-            <h2 className="font-medium text-gray-900 group-hover:text-[var(--brand-from)] transition-colors">{m.title}</h2>
+            <h2 className="font-medium text-gray-900 group-hover:text-blue-500 transition-colors">{m.title}</h2>
             {m.description && <p className="text-sm text-gray-500 mt-1">{m.description}</p>}
             <p className="text-xs text-gray-400 mt-2">{m.sentenceCount}文</p>
           </Link>

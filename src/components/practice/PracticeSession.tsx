@@ -129,7 +129,7 @@ export default function PracticeSession({ materialId, initialStep }: { materialI
     return (
       <div className="max-w-3xl mx-auto px-4 py-10 space-y-4">
         <ErrorBox message={error} />
-        <Link href="/catalog" className="text-sm text-gray-500 hover:text-[var(--brand-from)]">
+        <Link href="/catalog" className="text-sm text-gray-500 hover:text-blue-500">
           ← 教材を選ぶ
         </Link>
       </div>
@@ -142,7 +142,7 @@ export default function PracticeSession({ materialId, initialStep }: { materialI
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
-      <Link href={material.backHref} className="text-sm text-gray-500 hover:text-[var(--brand-from)]">
+      <Link href={material.backHref} className="text-sm text-gray-500 hover:text-blue-500">
         ← 戻る
       </Link>
       <div className="flex items-center gap-2 mt-4 mb-1">
@@ -168,7 +168,7 @@ export default function PracticeSession({ materialId, initialStep }: { materialI
                 aria-current={active ? "step" : undefined}
                 className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors whitespace-nowrap ${
                   active
-                    ? "bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white"
+                    ? "bg-blue-500 text-white"
                     : done.has(s.id)
                       ? "bg-green-50 text-green-700 hover:bg-green-100"
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200"
@@ -309,7 +309,7 @@ function StepPanel({
             value={rate}
             onChange={(e) => setRate(Number(e.target.value))}
             disabled={busy}
-            className="rounded-md border border-gray-300 px-2 py-1 text-sm"
+            className="rounded-xl border-0 bg-gray-100 px-2 py-1 text-[15px] focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/60"
           >
             {RATES.map((r) => (
               <option key={r} value={r}>
@@ -318,7 +318,7 @@ function StepPanel({
             ))}
           </select>
         </label>
-        <button onClick={() => setShowScript((v) => !v)} className="text-sm text-[var(--brand-from)] hover:underline ml-auto">
+        <button onClick={() => setShowScript((v) => !v)} className="text-sm text-blue-500 hover:underline ml-auto">
           {showScript ? "スクリプトを隠す" : "スクリプトを表示"}
         </button>
       </div>
@@ -353,7 +353,7 @@ function StepPanel({
                 value={target === null ? "all" : String(target)}
                 onChange={(e) => setTarget(e.target.value === "all" ? null : Number(e.target.value))}
                 disabled={busy || step.id === "record"}
-                className="rounded-md border border-gray-300 px-2 py-1 text-sm max-w-xs"
+                className="rounded-xl border-0 bg-gray-100 px-2 py-1 text-[15px] focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/60 max-w-xs"
               >
                 <option value="all">全文（通し）</option>
                 {material.sentences.map((s, i) => (
@@ -407,7 +407,7 @@ function StepPanel({
 
       {onNext && (done || results.length > 0) && (
         <div className="mt-6 text-right">
-          <button onClick={onNext} className="text-sm font-medium text-[var(--brand-from)] hover:underline">
+          <button onClick={onNext} className="text-sm font-medium text-blue-500 hover:underline">
             次のステップへ →
           </button>
         </div>

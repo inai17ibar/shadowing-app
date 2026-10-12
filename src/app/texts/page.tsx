@@ -54,7 +54,7 @@ export default function TextsPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">自分の文章</h1>
+      <h1 className="text-[32px] leading-tight font-bold tracking-tight text-gray-900 mb-2">自分の文章</h1>
       <p className="text-gray-500 text-sm mb-6">
         貼り付けた文章やWebページの本文を、自分専用の練習教材にします。他の人には公開されません。
         レッスンの宿題で作られた「言い直し」もここに入ります。
@@ -175,7 +175,7 @@ function AddForm({ onAdded }: { onAdded: (t: UserText) => void }) {
         onChange={(e) => setTitle(e.target.value)}
         placeholder="タイトル（省略可）"
         maxLength={200}
-        className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+        className="block w-full rounded-xl border-0 bg-gray-100 px-3 py-2 text-[15px] focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/60"
       />
       {mode === "text" ? (
         <textarea
@@ -184,7 +184,7 @@ function AddForm({ onAdded }: { onAdded: (t: UserText) => void }) {
           placeholder="英文を貼り付け（20,000文字まで）"
           maxLength={20_000}
           rows={6}
-          className="block w-full rounded-md border border-gray-300 p-3 text-sm"
+          className="block w-full rounded-xl border-0 bg-gray-100 p-3 text-[15px] focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/60"
         />
       ) : (
         <input
@@ -192,7 +192,7 @@ function AddForm({ onAdded }: { onAdded: (t: UserText) => void }) {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://..."
-          className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          className="block w-full rounded-xl border-0 bg-gray-100 px-3 py-2 text-[15px] focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/60"
         />
       )}
       {error && <ErrorBox message={error} />}
