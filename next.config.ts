@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
 const nextConfig: NextConfig = {
   async headers() {
@@ -15,3 +16,6 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+// `next dev` でも Cloudflare のバインディング（.dev.vars 等）を使えるようにする
+initOpenNextCloudflareForDev();

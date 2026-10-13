@@ -554,7 +554,7 @@ function ReaderInner() {
   if (sentences.length === 0) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-10 animate-fade-in">
-        <h1 className="text-2xl font-bold text-gray-900 mb-6">
+        <h1 className="text-[32px] leading-tight font-bold tracking-tight text-gray-900 mb-6">
           テキスト読み上げ
         </h1>
 
@@ -574,7 +574,7 @@ function ReaderInner() {
               }}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 inputMode === m
-                  ? "bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white"
+                  ? "bg-blue-500 text-white"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
@@ -596,12 +596,12 @@ function ReaderInner() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com/article"
-              className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand-from)] focus:border-transparent"
+              className="w-full border-0 bg-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 "
             />
             <button
               type="submit"
               disabled={urlLoading}
-              className="bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white px-6 py-3 rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+              className="bg-blue-500 text-white px-6 py-3 rounded-full font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
             >
               {urlLoading ? "読み込み中..." : "テキストを抽出"}
             </button>
@@ -615,11 +615,11 @@ function ReaderInner() {
               onChange={(e) => setRawText(e.target.value)}
               rows={8}
               placeholder="テキストをここに貼り付けてください..."
-              className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand-from)] focus:border-transparent resize-y"
+              className="w-full border-0 bg-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
             />
             <button
               type="submit"
-              className="bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white px-6 py-3 rounded-xl font-medium hover:opacity-90 transition-opacity"
+              className="bg-blue-500 text-white px-6 py-3 rounded-full font-medium hover:opacity-90 transition-opacity"
             >
               読み込む
             </button>
@@ -637,7 +637,7 @@ function ReaderInner() {
                 {savedTexts.map((t) => (
                   <li
                     key={t.id}
-                    className="flex items-center justify-between rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+                    className="flex items-center justify-between rounded-2xl bg-surface shadow-card p-4 hover:shadow-float transition-shadow"
                   >
                     <button
                       onClick={() => loadSavedText(t.id)}
@@ -694,7 +694,7 @@ function ReaderInner() {
       {/* Progress bar */}
       <div className="w-full bg-gray-200 rounded-full h-1.5 mb-6">
         <div
-          className="bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] h-1.5 rounded-full transition-all duration-300"
+          className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
           style={{ width: `${progress}%` }}
         />
       </div>
@@ -718,7 +718,7 @@ function ReaderInner() {
             }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               mode === m
-                ? "bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white"
+                ? "bg-blue-500 text-white"
                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
             }`}
           >
@@ -728,12 +728,12 @@ function ReaderInner() {
       </div>
 
       {/* Controls card */}
-      <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm mb-6 space-y-4">
+      <div className="rounded-2xl bg-surface shadow-card p-5 mb-6 space-y-4">
         <div className="flex items-center justify-center gap-3">
           <button
             onClick={prev}
             aria-label="前の文"
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-from)]"
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
@@ -743,7 +743,7 @@ function ReaderInner() {
           <button
             onClick={playPause}
             aria-label={isPlaying ? "一時停止" : "再生"}
-            className="w-12 h-12 flex items-center justify-center rounded-full bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white shadow-md hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-from)] focus-visible:ring-offset-2"
+            className="w-12 h-12 flex items-center justify-center rounded-full bg-blue-500 text-white shadow-md hover:opacity-90 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             {isPlaying ? (
               <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
@@ -759,7 +759,7 @@ function ReaderInner() {
           <button
             onClick={next}
             aria-label="次の文"
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-from)]"
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
@@ -769,7 +769,7 @@ function ReaderInner() {
           <button
             onClick={repeat}
             aria-label="繰り返し"
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-from)]"
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
@@ -786,7 +786,7 @@ function ReaderInner() {
               onClick={() => setSpeed(s)}
               className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors ${
                 speed === s
-                  ? "bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white"
+                  ? "bg-blue-500 text-white"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
@@ -804,7 +804,7 @@ function ReaderInner() {
             id="voice-select"
             value={selectedVoice}
             onChange={(e) => setSelectedVoice(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--brand-from)] max-w-xs"
+            className="border-0 bg-gray-100 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 max-w-xs"
           >
             {voices.map((v) => (
               <option key={v.name} value={v.name}>
@@ -821,7 +821,7 @@ function ReaderInner() {
               id="auto-advance"
               checked={autoAdvance}
               onChange={(e) => setAutoAdvance(e.target.checked)}
-              className="accent-[var(--brand-from)]"
+              className="accent-blue-500"
             />
             <label htmlFor="auto-advance" className="text-sm text-gray-600">
               自動で次の文へ進む
@@ -865,7 +865,7 @@ function ReaderInner() {
 
       {/* Practice mode: manual recording */}
       {mode === "practice" && (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm mb-6 space-y-4">
+        <div className="rounded-2xl bg-surface shadow-card p-5 mb-6 space-y-4">
           <h3 className="text-sm font-semibold text-gray-700">発音練習</h3>
           <p className="text-xs text-gray-500">
             お手本を聞いてから、マイクボタンを押して同じ文を話してください
@@ -876,7 +876,7 @@ function ReaderInner() {
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm transition-all ${
               isRecording
                 ? "bg-red-500 text-white animate-pulse"
-                : "bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white hover:opacity-90"
+                : "bg-blue-500 text-white hover:opacity-90"
             } disabled:opacity-40`}
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -889,7 +889,7 @@ function ReaderInner() {
 
       {/* Pronunciation result (for practice & shadowing modes) */}
       {(mode === "practice" || mode === "shadowing") && (transcript || pronResult) && (
-        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm mb-6 space-y-4">
+        <div className="rounded-2xl bg-surface shadow-card p-5 mb-6 space-y-4">
           {transcript && (
             <div className="space-y-2">
               <div>
@@ -982,7 +982,7 @@ function ReaderInner() {
               {mode === "shadowing" && currentIdx < sentences.length - 1 && (
                 <button
                   onClick={shadowNext}
-                  className="w-full bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white py-2.5 rounded-xl font-medium hover:opacity-90 transition-opacity text-sm"
+                  className="w-full bg-blue-500 text-white py-2.5 rounded-xl font-medium hover:opacity-90 transition-opacity text-sm"
                 >
                   次の文へ →
                 </button>
@@ -993,7 +993,7 @@ function ReaderInner() {
       )}
 
       {/* Script with word-level highlights */}
-      <div className="rounded-xl border border-gray-200 bg-white shadow-sm mb-6 p-5 max-h-[50vh] overflow-y-auto leading-[1.9]">
+      <div className="rounded-2xl bg-surface shadow-card mb-6 p-5 max-h-[50vh] overflow-y-auto leading-[1.9]">
         {sentences.map((s, si) => {
           const words = splitToWords(s);
           const isCurrent = si === currentIdx;
@@ -1063,19 +1063,19 @@ function ReaderInner() {
       <div className="flex flex-wrap gap-3">
         <button
           onClick={handleSave}
-          className="bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white px-5 py-2.5 rounded-xl font-medium hover:opacity-90 transition-opacity text-sm"
+          className="bg-blue-500 text-white px-5 py-2.5 rounded-full font-medium hover:opacity-90 transition-opacity text-sm"
         >
           保存する
         </button>
         <button
           onClick={handleReset}
-          className="border border-gray-300 text-gray-700 px-5 py-2.5 rounded-xl font-medium hover:bg-gray-50 transition-colors text-sm"
+          className="bg-gray-100 text-blue-500 px-5 py-2.5 rounded-full font-medium hover:bg-gray-200 transition-colors text-sm"
         >
           別のテキストを読む
         </button>
         <Link
           href="/"
-          className="border border-gray-300 text-gray-700 px-5 py-2.5 rounded-xl font-medium hover:bg-gray-50 transition-colors text-sm"
+          className="bg-gray-100 text-blue-500 px-5 py-2.5 rounded-full font-medium hover:bg-gray-200 transition-colors text-sm"
         >
           ホームに戻る
         </Link>

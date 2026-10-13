@@ -1,15 +1,185 @@
 @import "tailwindcss";
 
+/*
+ * デザインの土台（Apple の Human Interface Guidelines に寄せる）。
+ *
+ * - 文字はシステムフォント（Apple 端末では SF Pro とヒラギノ）
+ * - 色は Apple のシステムカラー。Tailwind の gray / blue / green / red / amber などの段階を
+ *   ここで置き換えるので、各画面は今までどおり text-gray-500 などと書けばよい
+ * - ダークモードは OS の設定に従い、同じクラス名のまま色だけが切り替わる
+ *   （gray は明暗を反転、薄い色の背景は暗い背景に色を少し混ぜたものになる）
+ * - 白いカードは bg-white ではなく bg-surface と書く（ダークモードで暗くなる）
+ * - purple は使わない（ブランド色＝青に寄せる）。例外はロゴの波形で、紫から青へのグラデーション
+ *   （--logo-from / --logo-to）
+ */
+@theme static {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+
+  /* 面 */
+  --color-canvas: #f5f5f7;
+  --color-surface: #ffffff;
+  --color-surface-raised: #ffffff;
+  --color-separator: rgb(60 60 67 / 0.12);
+
+  /* 無彩色（Apple の label / fill / separator に相当する段階） */
+  --color-gray-50: #f5f5f7;
+  --color-gray-100: #ebebf0;
+  --color-gray-200: #e0e0e5;
+  --color-gray-300: #d2d2d7;
+  --color-gray-400: #aeaeb2;
+  --color-gray-500: #86868b;
+  --color-gray-600: #6e6e73;
+  --color-gray-700: #48484a;
+  --color-gray-800: #2c2c2e;
+  --color-gray-900: #1d1d1f;
+  --color-gray-950: #000000;
+
+  /* systemBlue（ブランド色） */
+  --color-blue-50: #eef5ff;
+  --color-blue-100: #dceaff;
+  --color-blue-200: #b8d5ff;
+  --color-blue-300: #8abaff;
+  --color-blue-400: #4d9bff;
+  --color-blue-500: #007aff;
+  --color-blue-600: #0071e3;
+  --color-blue-700: #0062c4;
+  --color-blue-800: #0040dd;
+  --color-blue-900: #00309f;
+
+  /* systemGreen */
+  --color-green-50: #effaf2;
+  --color-green-100: #dbf5e2;
+  --color-green-200: #b4ebc2;
+  --color-green-500: #34c759;
+  --color-green-600: #28a745;
+  --color-green-700: #248a3d;
+  --color-green-800: #1c6e31;
+
+  /* systemRed */
+  --color-red-50: #fff1f0;
+  --color-red-100: #ffe0de;
+  --color-red-200: #ffc2be;
+  --color-red-400: #ff6961;
+  --color-red-500: #ff3b30;
+  --color-red-600: #e5352b;
+  --color-red-700: #d70015;
+  --color-red-800: #b00012;
+
+  /* systemOrange（注意・警告） */
+  --color-amber-50: #fff6eb;
+  --color-amber-100: #ffead1;
+  --color-amber-200: #ffd6a3;
+  --color-amber-700: #c93400;
+  --color-amber-800: #a32a00;
+  --color-amber-900: #7a2000;
+  --color-yellow-300: #ffd60a;
+  --color-yellow-500: #ffcc00;
+  --color-yellow-600: #b25000;
+
+  /* purple は青に寄せる（旧ブランド色の名残を一掃する） */
+  --color-purple-50: var(--color-blue-50);
+  --color-purple-100: var(--color-blue-100);
+  --color-purple-200: var(--color-blue-200);
+  --color-purple-300: var(--color-blue-300);
+  --color-purple-700: var(--color-blue-700);
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 16px rgb(0 0 0 / 0.04);
+  --shadow-float: 0 8px 30px rgb(0 0 0 / 0.08);
+}
+
 :root {
-  --brand-from: #667eea;
-  --brand-to: #764ba2;
-  --brand-gradient: linear-gradient(to right, var(--brand-from), var(--brand-to));
+  --brand-from: var(--color-blue-500);
+  --brand-to: var(--color-blue-500);
+  --brand-gradient: var(--color-blue-500);
+  /* ロゴの波形（Apple の systemPurple → systemIndigo → systemBlue の流れ） */
+  --logo-from: #af52de;
+  --logo-to: #007aff;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --logo-from: #bf5af2;
+    --logo-to: #0a84ff;
+    --color-canvas: #000000;
+    --color-surface: #1c1c1e;
+    --color-surface-raised: #2c2c2e;
+    --color-separator: rgb(84 84 88 / 0.6);
+
+    --color-gray-50: #1c1c1e;
+    --color-gray-100: #2c2c2e;
+    --color-gray-200: #38383a;
+    --color-gray-300: #48484a;
+    --color-gray-400: #636366;
+    --color-gray-500: #98989d;
+    --color-gray-600: #aeaeb2;
+    --color-gray-700: #d1d1d6;
+    --color-gray-800: #e5e5ea;
+    --color-gray-900: #f5f5f7;
+    --color-gray-950: #ffffff;
+
+    --color-blue-50: color-mix(in srgb, #0a84ff 14%, #1c1c1e);
+    --color-blue-100: color-mix(in srgb, #0a84ff 24%, #1c1c1e);
+    --color-blue-200: color-mix(in srgb, #0a84ff 40%, #1c1c1e);
+    --color-blue-500: #0a84ff;
+    --color-blue-600: #0a84ff;
+    --color-blue-700: #409cff;
+    --color-blue-800: #6bb3ff;
+
+    --color-green-50: color-mix(in srgb, #30d158 14%, #1c1c1e);
+    --color-green-100: color-mix(in srgb, #30d158 24%, #1c1c1e);
+    --color-green-200: color-mix(in srgb, #30d158 40%, #1c1c1e);
+    --color-green-500: #30d158;
+    --color-green-600: #30d158;
+    --color-green-700: #30db5b;
+    --color-green-800: #7ee495;
+
+    --color-red-50: color-mix(in srgb, #ff453a 14%, #1c1c1e);
+    --color-red-100: color-mix(in srgb, #ff453a 24%, #1c1c1e);
+    --color-red-200: color-mix(in srgb, #ff453a 40%, #1c1c1e);
+    --color-red-500: #ff453a;
+    --color-red-600: #ff453a;
+    --color-red-700: #ff6961;
+    --color-red-800: #ff9a94;
+
+    --color-amber-50: color-mix(in srgb, #ff9f0a 14%, #1c1c1e);
+    --color-amber-100: color-mix(in srgb, #ff9f0a 24%, #1c1c1e);
+    --color-amber-200: color-mix(in srgb, #ff9f0a 40%, #1c1c1e);
+    --color-amber-700: #ffb340;
+    --color-amber-800: #ffc266;
+    --color-amber-900: #ffd699;
+    --color-yellow-600: #ffd60a;
+
+    --shadow-card: 0 0 0 1px rgb(255 255 255 / 0.06);
+    --shadow-float: 0 0 0 1px rgb(255 255 255 / 0.08);
+  }
 }
 
 body {
-  background: #f9fafb;
-  color: #171717;
-  font-family: var(--font-inter), system-ui, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-gray-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "palt";
+}
+
+/* 見出しは SF Pro Display のように詰める */
+h1,
+h2 {
+  letter-spacing: -0.015em;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-blue-500) 25%, transparent);
+}
+
+/* キーボード操作のときだけ、Apple 風の青いリングを出す */
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-blue-500) 45%, transparent);
+  outline-offset: 2px;
 }
 
 @keyframes fade-in {
@@ -23,16 +193,23 @@ body {
 }
 
 .animate-fade-in {
-  animation: fade-in 0.4s ease-out both;
+  animation: fade-in 0.5s cubic-bezier(0.25, 0.1, 0.25, 1) both;
 }
 
 .animate-fade-in-up {
-  animation: fade-in-up 0.5s ease-out both;
+  animation: fade-in-up 0.6s cubic-bezier(0.25, 0.1, 0.25, 1) both;
 }
 
-.stagger-1 { animation-delay: 0.1s; }
-.stagger-2 { animation-delay: 0.2s; }
-.stagger-3 { animation-delay: 0.3s; }
+.stagger-1 { animation-delay: 0.08s; }
+.stagger-2 { animation-delay: 0.16s; }
+.stagger-3 { animation-delay: 0.24s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-fade-in-up {
+    animation: none;
+  }
+}
 
 @keyframes skeleton-pulse {
   0%, 100% { opacity: 0.4; }
@@ -40,8 +217,8 @@ body {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background: linear-gradient(90deg, var(--color-gray-200) 25%, var(--color-gray-100) 50%, var(--color-gray-200) 75%);
   background-size: 200% 100%;
   animation: skeleton-pulse 1.5s ease-in-out infinite;
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
 }
