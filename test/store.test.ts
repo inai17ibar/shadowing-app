@@ -199,3 +199,61 @@ test("Web版の保存テキストを保存・取得・削除できる", async ()
   assert.equal(await store.deleteSavedText(id), true);
   assert.equal(await store.getSavedText(id), null);
 });
+
+test("5000件超でも同時刻の記録を含め全件取得し、最新の計画・進捗を反映する", async () => {
+  const { buildTodayPlan, dailyHistory, weakSentences } = await import("../src/lib/practice-plan.ts");
+  const { store, alice, bob } = await setup();
+  await store.insertMaterialCandidates([material("m1"), material("m2")]);
+  for (let i = 0; i < 5001; i++) {
+    await store.insertAttempt(alice.id, attempt({ id: `old-${String(i).padStart(5, "0")}`, createdAt: "2026-10-11T00:00:00.000Z" }));
+  }
+  await store.insertAttempt(alice.id, attempt({ id: "latest", step: "record", score: 95 }));
+  await store.insertAttempt(alice.id, attempt({ id: "weak", sentenceIndex: 0, score: 40 }));
+  await store.insertAttempt(bob.id, attempt());
+  const all = await store.listAttempts(alice.id);
+  assert.equal(all.length, 5003);
+  assert.equal(new Set(all.map((a) => a.id)).size, 5003);
+  assert.ok(all.some((a) => a.id === "latest"));
+  const scoped = await store.listAttempts(alice.id, { materialId: "m1", sinceIso: "2026-10-12T00:00:00.000Z" });
+  assert.equal(scoped.length, 2);
+  const now = new Date("2026-10-12T10:00:00Z");
+  const plan = buildTodayPlan({ materialId: "m1", startedOn: "2026-10-11" }, all, now, "Asia/Tokyo");
+  assert.equal(plan.todayRecordScore, 95);
+  assert.equal(plan.steps.find((s) => s.id === "record")?.done, true);
+  assert.equal(dailyHistory(all, now, "Asia/Tokyo", 2)[1].bestRecordScore, 95);
+  assert.equal(weakSentences("m1", all)[0].averageScore, 40);
+  assert.equal(await store.getStreak(alice.id, now, "Asia/Tokyo"), 2);
+  assert.deepEqual(await store.listPracticedMaterialIds(bob.id), ["m1"]);
+});
+
+test("60日以前の教材は再割り当てせず、古い習得点もレベル調整に使う", async () => {
+  const { decideAssignment } = await import("../src/lib/practice-plan.ts");
+  const { store, alice, bob } = await setup();
+  await store.insertMaterialCandidates([material("m1"), material("m2"), material("m3", { level: "intermediate" })]);
+  await store.insertAttempt(alice.id, attempt({ materialId: "m1", createdAt: "2026-01-01T00:00:00.000Z" }));
+  await store.insertAttempt(alice.id, attempt({ materialId: "m2", step: "record", score: 95, createdAt: "2026-02-01T00:00:00.000Z" }));
+  const decision = decideAssignment({
+    current: { materialId: "m2", startedOn: "2026-02-01" }, level: "beginner",
+    attempts: await store.listAttempts(alice.id, { materialId: "m2" }),
+    practicedMaterialIds: await store.listPracticedMaterialIds(alice.id),
+    materials: await store.listMaterialLevels(), now: new Date("2026-10-12T00:00:00Z"), timeZone: "Asia/Tokyo",
+  });
+  assert.deepEqual(decision, { action: "advance", reason: "mastered", materialId: "m3", level: "intermediate" });
+  assert.deepEqual(await store.listPracticedMaterialIds(bob.id), []);
+});
+
+test("連続学習は60日を超え、昨日までの継続・欠落・未来・タイムゾーンを扱う", async () => {
+  const { store, alice, bob } = await setup();
+  await store.insertMaterialCandidates([material("m1")]);
+  const now = new Date("2026-10-12T00:30:00Z");
+  for (let i = 0; i < 100; i++) {
+    // JSTでは今日から100日。UTCでは今日の前日から始まる。
+    const createdAt = new Date(Date.parse("2026-10-11T15:30:00Z") - i * 86_400_000).toISOString();
+    await store.insertAttempt(alice.id, attempt({ createdAt }));
+  }
+  await store.insertAttempt(alice.id, attempt({ createdAt: "2027-01-01T00:00:00.000Z" }));
+  assert.equal(await store.getStreak(alice.id, now, "Asia/Tokyo"), 100);
+  assert.equal(await store.getStreak(alice.id, now, "UTC"), 100, "昨日まで継続");
+  assert.equal(await store.getStreak(bob.id, now, "Asia/Tokyo"), 0);
+  assert.equal(await store.getStreak(alice.id, new Date("2026-10-14T00:30:00Z"), "Asia/Tokyo"), 0, "昨日の記録がなければ途切れる");
+});

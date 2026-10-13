@@ -1,7 +1,7 @@
 import { ApiError, handle, ok } from "@/lib/api/http";
 import { requireUser } from "@/lib/api/auth";
 import { getStore } from "@/lib/api/env";
-import { computeStreak, dailyHistory, localDate } from "@/lib/practice-plan";
+import { dailyHistory, localDate } from "@/lib/practice-plan";
 
 // GET /api/v1/me/progress?days=14 — 連続日数・日別の練習量と本番スコアの推移
 export async function GET(request: Request) {
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const store = getStore();
     const now = new Date();
     const profile = (await store.getProfile(user.id)) ?? (await store.upsertProfile(user.id, {}));
-    const since = new Date(now.getTime() - Math.max(days, 60) * 86_400_000).toISOString();
+    const since = new Date(now.getTime() - (days + 1) * 86_400_000).toISOString();
     const attempts = await store.listAttempts(user.id, { sinceIso: since });
     const history = dailyHistory(attempts, now, profile.timeZone, days);
     const inRange = attempts.filter(
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 
     return ok({
       level: profile.level,
-      streak: computeStreak(attempts, now, profile.timeZone),
+      streak: await store.getStreak(user.id, now, profile.timeZone),
       totals: {
         attempts: inRange.length,
         practiceMinutes: Math.round(

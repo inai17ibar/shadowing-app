@@ -235,6 +235,8 @@ export function decideAssignment(input: {
   level: Level;
   attempts: AttemptLike[];
   materials: MaterialSummary[];
+  /** 全期間の学習済みID。詳細記録を教材単位に絞っても重複を防ぐ */
+  practicedMaterialIds?: string[];
   now: Date;
   timeZone: string;
 }): AssignmentDecision {
@@ -261,7 +263,7 @@ export function decideAssignment(input: {
     ? adjustLevel(input.level, bestRecordScore(current.materialId, attempts), reason)
     : input.level;
 
-  const practiced = new Set(attempts.map((a) => a.materialId));
+  const practiced = new Set([...(input.practicedMaterialIds ?? []), ...attempts.map((a) => a.materialId)]);
   if (current) practiced.add(current.materialId);
 
   // 同じレベル → 近いレベルの順に、まだやっていない教材を探す

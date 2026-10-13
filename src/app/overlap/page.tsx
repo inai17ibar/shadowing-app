@@ -13,6 +13,7 @@ import {
   computeEnvelope,
   envelopeFromBoundaries,
   scoreOverlap,
+  speechBoundary,
   type Envelope,
   type OverlapResult,
   type WordBoundary,
@@ -100,7 +101,7 @@ export default function OverlapPage() {
     };
     utterance.onboundary = (e) => {
       if (e.name && e.name !== "word") return;
-      boundaries.push({ charIndex: e.charIndex, elapsedMs: e.elapsedTime });
+      boundaries.push(speechBoundary(e));
     };
 
     const spoken = new Promise<number>((resolve) => {

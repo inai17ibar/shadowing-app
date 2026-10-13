@@ -173,3 +173,28 @@ test("境界イベントが取れなかった場合は無音の包絡を返す�
   assert.equal(e.frames.length, 100);
   assert.ok(e.frames.every((v) => v === 0));
 });
+
+test("秒単位のTTSイベントを4秒の発話に変換し、300ms遅れで採点できる", async () => {
+  const { speechBoundary, envelopeFromBoundaries } = await import("../src/lib/overlap.ts");
+  const text = "one two three four";
+  const boundaries = [
+    { charIndex: 0, elapsedTime: 0.2 },
+    { charIndex: 4, elapsedTime: 0.5 },
+    { charIndex: 8, elapsedTime: 0.8 },
+    { charIndex: 14, elapsedTime: 3.6 },
+  ].map(speechBoundary);
+  assert.equal(boundaries[3].elapsedMs, 3600);
+  const reference = envelopeFromBoundaries(boundaries, text, 4000);
+  assert.equal(reference.frames.length, 400);
+  assert.equal(reference.frames[10], 0, "発話開始前は無音");
+  assert.equal(reference.frames[40], 1, "400ms時点は発話中");
+  assert.equal(reference.frames[250], 0, "長い語間は無音");
+  assert.equal(reference.frames[380], 1, "最後の語は3.6秒から始まる");
+  const user = { hopMs: 10, frames: [...Array<number>(30).fill(0), ...reference.frames] };
+  const result = scoreOverlap(reference, user);
+  assert.equal(result.lagMs, 300);
+  assert.ok(result.rhythm > 0.99);
+  assert.equal(result.coverage, 1);
+  assert.equal(result.rateRatio, 1);
+  assert.equal(result.score, 100);
+});

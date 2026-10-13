@@ -7,7 +7,7 @@
  * Next.js にも Workers にも依存しない（D1 の形をしたものを渡せば Node のテストでも動く）。
  */
 import type { D1Database } from "./d1.ts";
-import type { Level, StepId } from "../practice-plan.ts";
+import { localDate, type Level, type StepId } from "../practice-plan.ts";
 import type { License } from "../content-policy.ts";
 
 // ---------------------------------------------------------------------------
@@ -642,11 +642,59 @@ export function createStore(db: D1Database, { now = () => new Date() } = {}) {
         where.push("material_id = ?");
         params.push(opts.materialId);
       }
+      // 全件をキーセットで読む。固定上限で最新記録を黙って落とさない。
+      const attempts: Attempt[] = [];
+      let cursor: { createdAt: string; id: string } | undefined;
+      for (;;) {
+        const after = cursor ? " AND (created_at > ? OR (created_at = ? AND id > ?))" : "";
+        const { results } = await db
+          .prepare(`SELECT * FROM attempts WHERE ${where.join(" AND ")}${after}
+                    ORDER BY created_at ASC, id ASC LIMIT 1000`)
+          .bind(...params, ...(cursor ? [cursor.createdAt, cursor.createdAt, cursor.id] : []))
+          .all<Row>();
+        attempts.push(...results.map(attemptFromRow));
+        if (results.length < 1000) return attempts;
+        const last = attempts[attempts.length - 1];
+        cursor = { createdAt: last.createdAt, id: last.id };
+      }
+    },
+
+    /** 全期間を教材IDだけに集約。日々の計画で過去の詳細記録を読む必要はない。 */
+    async listPracticedMaterialIds(userId: string): Promise<string[]> {
       const { results } = await db
-        .prepare(`SELECT * FROM attempts WHERE ${where.join(" AND ")} ORDER BY created_at ASC LIMIT 5000`)
-        .bind(...params)
-        .all<Row>();
-      return results.map(attemptFromRow);
+        .prepare("SELECT DISTINCT material_id FROM attempts WHERE user_id = ?")
+        .bind(userId)
+        .all<{ material_id: string }>();
+      return results.map((r) => r.material_id);
+    },
+
+    /** 直近から途切れる日まで読む。60日上限なし、過去の全詳細も読み込まない。 */
+    async getStreak(userId: string, at: Date, timeZone: string): Promise<number> {
+      const previousDay = (day: string) =>
+        new Date(Date.parse(`${day}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+      const today = localDate(at, timeZone);
+      let expected = today;
+      let streak = 0;
+      let cursor: { createdAt: string; id: string } | undefined;
+      for (;;) {
+        const before = cursor ? " AND (created_at < ? OR (created_at = ? AND id < ?))" : "";
+        const { results } = await db
+          .prepare(`SELECT id, created_at FROM attempts WHERE user_id = ?${before}
+                    ORDER BY created_at DESC, id DESC LIMIT 512`)
+          .bind(userId, ...(cursor ? [cursor.createdAt, cursor.createdAt, cursor.id] : []))
+          .all<{ id: string; created_at: string }>();
+        for (const row of results) {
+          const day = localDate(row.created_at, timeZone);
+          if (day > expected) continue; // 重複した日・未来の記録
+          if (streak === 0 && expected === today && day < today) expected = previousDay(today);
+          if (day < expected) return streak;
+          streak++;
+          expected = previousDay(expected);
+        }
+        if (results.length < 512) return streak;
+        const last = results[results.length - 1];
+        cursor = { createdAt: last.created_at, id: last.id };
+      }
     },
 
     async getAttempt(userId: string, id: string): Promise<Attempt | null> {

@@ -240,8 +240,13 @@ function buildFeedback(m: OverlapMetrics, score: number): string {
 export interface WordBoundary {
   /** 読み上げテキスト中の位置 */
   charIndex: number
-  /** 発話開始からの経過ミリ秒（SpeechSynthesis の elapsedTime） */
+  /** 発話開始からの経過ミリ秒（SpeechSynthesis の秒単位を変換済み） */
   elapsedMs: number
+}
+
+/** Web Speech API の秒単位を、採点用のミリ秒に変換する。 */
+export function speechBoundary(event: { charIndex: number; elapsedTime: number }): WordBoundary {
+  return { charIndex: event.charIndex, elapsedMs: event.elapsedTime * 1000 }
 }
 
 /**

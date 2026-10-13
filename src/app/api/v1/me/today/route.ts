@@ -3,7 +3,6 @@ import { requireUser } from "@/lib/api/auth";
 import { getStore } from "@/lib/api/env";
 import {
   buildTodayPlan,
-  computeStreak,
   decideAssignment,
   localDate,
   weakSentences,
@@ -24,14 +23,19 @@ export async function GET(request: Request) {
     const profile = (await store.getProfile(user.id)) ?? (await store.upsertProfile(user.id, {}));
     const tz = profile.timeZone;
     let assignment = await store.getAssignment(user.id);
-    // 割り当てと連続日数の計算には直近60日あれば足りる
-    const since = new Date(now.getTime() - 60 * 86_400_000).toISOString();
-    const attempts = await store.listAttempts(user.id, { sinceIso: since });
+    const [practicedMaterialIds, streak] = await Promise.all([
+      store.listPracticedMaterialIds(user.id),
+      store.getStreak(user.id, now, tz),
+    ]);
+    let attempts = assignment
+      ? await store.listAttempts(user.id, { materialId: assignment.materialId })
+      : [];
 
     const decision = decideAssignment({
       current: assignment,
       level: profile.level,
       attempts,
+      practicedMaterialIds,
       materials: await store.listMaterialLevels(),
       now,
       timeZone: tz,
@@ -41,6 +45,7 @@ export async function GET(request: Request) {
     if (decision.action === "advance") {
       assignment = { materialId: decision.materialId, startedOn: localDate(now, tz) };
       await store.setAssignment(user.id, assignment);
+      attempts = await store.listAttempts(user.id, { materialId: assignment.materialId });
       if (decision.level !== profile.level) {
         await store.upsertProfile(user.id, { level: decision.level });
         levelChanged = true;
@@ -51,7 +56,7 @@ export async function GET(request: Request) {
       return ok({
         status: "exhausted",
         message: "練習できる新しい教材がありません。自分の文章を取り込むか、新着をお待ちください。",
-        streak: computeStreak(attempts, now, tz),
+        streak,
       });
     }
 
@@ -74,7 +79,7 @@ export async function GET(request: Request) {
       level: decision.action === "advance" ? decision.level : profile.level,
       ...plan,
       weakSentences: weakSentences(assignment.materialId, attempts),
-      streak: computeStreak(attempts, now, tz),
+      streak,
       goalMinutes,
     });
   });
