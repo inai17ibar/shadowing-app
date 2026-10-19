@@ -8,6 +8,7 @@
 import {
   computeEnvelope,
   envelopeFromBoundaries,
+  speechBoundary,
   type Envelope,
   type WordBoundary,
 } from "@/lib/overlap";
@@ -130,7 +131,7 @@ export async function recordOverlap(
     };
     u.onboundary = (e) => {
       if (e.name && e.name !== "word") return;
-      boundaries.push({ charIndex: e.charIndex, elapsedMs: e.elapsedTime });
+      boundaries.push(speechBoundary(e));
     };
     const spoken = new Promise<number>((resolve) => {
       u.onend = () => resolve(performance.now() - recordStart - speakStart);
