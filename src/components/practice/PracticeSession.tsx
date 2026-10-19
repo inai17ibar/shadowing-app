@@ -19,6 +19,9 @@ import {
   speak,
   stopSpeaking,
 } from "@/lib/client/recording";
+import { alignmentMetrics } from "@/lib/overlap";
+import { checkSoundChanges, findSoundChanges, soundChangeFeedback, type SoundChangeCheck } from "@/lib/sound-changes";
+import { SoundChangeLegend, SoundChangeList, SoundChangeText } from "./SoundChangeText";
 import type { Material, PracticeStep, Sentence, StepId, StepsResponse, TodayResponse, UserText } from "./types";
 import { ErrorBox, LevelBadge, Loading, Notice, card, primaryButton, secondaryButton } from "./ui";
 
@@ -38,6 +41,8 @@ interface ResultEntry {
   sentenceIndex: number | null;
   /** サーバーが採点した結果。オフラインで送信待ちなら null */
   result: AttemptResult | null;
+  /** 連結・同化の所でつなげて言えていたか（端末で判定） */
+  soundChecks: SoundChangeCheck[];
 }
 
 const RATES = [0.6, 0.8, 1, 1.2];
@@ -267,6 +272,8 @@ function StepPanel({
     const text = target === null ? fullText : material.sentences[target].text;
     try {
       const rec = await recordOverlap(text, { voice, rate, onPhase: setPhase });
+      const { lagMs } = alignmentMetrics(rec.reference, rec.user);
+      const soundChecks = checkSoundChanges(text, rec.boundaries, rec.reference, rec.user, lagMs);
       setPhase("sending");
       const r = await recordAttempt({
         materialId: material.id,
@@ -276,7 +283,7 @@ function StepPanel({
         envelopes: { reference: rec.reference, user: rec.user },
       });
       setResults((prev) => [
-        { key: crypto.randomUUID(), step: step.id, sentenceIndex: target, result: r },
+        { key: crypto.randomUUID(), step: step.id, sentenceIndex: target, result: r, soundChecks },
         ...prev,
       ]);
       onDone(step.id);
@@ -324,6 +331,11 @@ function StepPanel({
       </div>
 
       {showScript && (
+        <div className="mb-3">
+          <SoundChangeLegend />
+        </div>
+      )}
+      {showScript && (
         <ol className="space-y-2 mb-6">
           {material.sentences.map((s, i) => (
             <li key={i} className="flex gap-2 items-start">
@@ -336,8 +348,15 @@ function StepPanel({
                 {playing === i ? "■" : "▶"}
               </button>
               <div>
-                <p className="text-gray-900 leading-relaxed">{s.text}</p>
+                <p className="text-gray-900 leading-relaxed">
+                  <SoundChangeText text={s.text} />
+                </p>
                 {s.translation && step.id === "script" && <p className="text-sm text-gray-500">{s.translation}</p>}
+                {step.id === "script" && (
+                  <div className="mt-1.5">
+                    <SoundChangeList changes={findSoundChanges(s.text)} />
+                  </div>
+                )}
               </div>
             </li>
           ))}
@@ -422,6 +441,8 @@ function ScoreCard({ entry, sentences }: { entry: ResultEntry; sentences: Senten
     return <Notice>{label}: オフラインのため後で送信します（採点は送信時に行われます）。</Notice>;
   }
   const a = entry.result.attempt;
+  const soundFeedback = soundChangeFeedback(entry.soundChecks);
+  const broken = entry.soundChecks.filter((c) => c.result === "broken");
   return (
     <div className="rounded-lg border border-gray-200 p-4">
       <div className="flex items-end gap-3 mb-2">
@@ -429,7 +450,9 @@ function ScoreCard({ entry, sentences }: { entry: ResultEntry; sentences: Senten
         <span className="text-sm text-gray-500 pb-1">/ 100 · {label}</span>
       </div>
       {entry.sentenceIndex !== null && (
-        <p className="text-sm text-gray-500 mb-2">{sentences[entry.sentenceIndex]?.text}</p>
+        <p className="text-sm text-gray-500 mb-2">
+          <SoundChangeText text={sentences[entry.sentenceIndex]?.text ?? ""} checks={entry.soundChecks} />
+        </p>
       )}
       {entry.result.feedback && <p className="text-sm mb-3">{entry.result.feedback}</p>}
       <dl className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
@@ -438,6 +461,13 @@ function ScoreCard({ entry, sentences }: { entry: ResultEntry; sentences: Senten
         <Metric label="話速比" value={a.rateRatio === null ? "-" : a.rateRatio.toFixed(2)} />
         <Metric label="カバー率" value={a.coverage === null ? "-" : `${Math.round(a.coverage * 100)}%`} />
       </dl>
+      {soundFeedback && (
+        <div className="mt-4 border-t border-separator pt-3">
+          <p className="mb-2 text-sm font-medium text-gray-900">音のつながり</p>
+          <p className="mb-2 text-sm text-gray-700">{soundFeedback}</p>
+          <SoundChangeList changes={broken} />
+        </div>
+      )}
     </div>
   );
 }

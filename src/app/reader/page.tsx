@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { englishVoices, pickEnglishVoice } from "@/lib/client/recording";
+import { findSoundChanges } from "@/lib/sound-changes";
+import { SoundChangeList, SoundChangeText } from "@/components/practice/SoundChangeText";
 
 interface SavedTextMeta {
   id: number;
@@ -129,22 +132,18 @@ function ReaderInner() {
 
   // Load voices
   useEffect(() => {
+    // 英語の声だけを選べるようにする（日本語の声で英文を読ませない）
     function loadVoices() {
-      const v = window.speechSynthesis.getVoices();
+      const v = englishVoices();
       if (v.length > 0) {
         setVoices(v);
-        if (!selectedVoice) {
-          const en = v.find((x) => x.lang.startsWith("en") && x.default);
-          const defaultV = en ?? v.find((x) => x.default) ?? v[0];
-          setSelectedVoice(defaultV.name);
-        }
+        setSelectedVoice((cur) => (v.some((x) => x.name === cur) ? cur : (pickEnglishVoice() ?? v[0]).name));
       }
     }
     loadVoices();
     window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
     return () =>
       window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadSavedText = useCallback(async (id: number) => {
@@ -294,6 +293,8 @@ function ReaderInner() {
       utter.rate = speed;
       const voice = voices.find((v) => v.name === selectedVoice);
       if (voice) utter.voice = voice;
+      // 声が選べないときも、ブラウザに英語の声を選ばせる
+      utter.lang = voice?.lang ?? "en-US";
 
       // Word-level highlight via boundary event
       const words = splitToWords(text);
@@ -870,6 +871,15 @@ function ReaderInner() {
           <p className="text-xs text-gray-500">
             お手本を聞いてから、マイクボタンを押して同じ文を話してください
           </p>
+          {sentences[currentIdx] && findSoundChanges(sentences[currentIdx]).length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-gray-500">この文の音の変化</p>
+              <p className="text-[15px] leading-relaxed text-gray-900">
+                <SoundChangeText text={sentences[currentIdx]} />
+              </p>
+              <SoundChangeList changes={findSoundChanges(sentences[currentIdx])} />
+            </div>
+          )}
           <button
             onClick={isRecording ? stopRecording : startRecordingInternal}
             disabled={isPlaying}
@@ -894,7 +904,7 @@ function ReaderInner() {
             <div className="space-y-2">
               <div>
                 <p className="text-xs text-gray-500 mb-1">お手本:</p>
-                <p className="text-sm text-gray-800 bg-gray-50 rounded-lg p-3">
+                <p lang="en" className="text-sm text-gray-800 bg-gray-50 rounded-lg p-3">
                   {sentences[currentIdx]}
                 </p>
               </div>
@@ -993,7 +1003,7 @@ function ReaderInner() {
       )}
 
       {/* Script with word-level highlights */}
-      <div className="rounded-2xl bg-surface shadow-card mb-6 p-5 max-h-[50vh] overflow-y-auto leading-[1.9]">
+      <div lang="en" className="rounded-2xl bg-surface shadow-card mb-6 p-5 max-h-[50vh] overflow-y-auto leading-[1.9]">
         {sentences.map((s, si) => {
           const words = splitToWords(s);
           const isCurrent = si === currentIdx;

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { api, ensureSession, errorMessage } from "@/lib/client/api";
 import type { Material } from "@/components/practice/types";
+import { SoundChangeLegend, SoundChangeText } from "@/components/practice/SoundChangeText";
 import {
   ErrorBox,
   LevelBadge,
@@ -103,11 +104,16 @@ export default function CatalogDetailPage() {
           </Link>
 
           <section className={`${card} mt-8`}>
-            <h2 className="font-semibold text-gray-900 mb-3">スクリプト（{material.sentences.length}文）</h2>
+            <h2 className="font-semibold text-gray-900 mb-2">スクリプト（{material.sentences.length}文）</h2>
+            <div className="mb-3">
+              <SoundChangeLegend />
+            </div>
             <ol className="space-y-3">
               {material.sentences.map((s, i) => (
                 <li key={i}>
-                  <p className="text-gray-900 leading-relaxed">{s.text}</p>
+                  <p className="text-gray-900 leading-relaxed">
+                    <SoundChangeText text={s.text} />
+                  </p>
                   {s.translation && <p className="text-sm text-gray-500">{s.translation}</p>}
                 </li>
               ))}

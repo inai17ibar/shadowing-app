@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { onVoicesChanged, pickEnglishVoice } from "@/lib/client/recording";
 import {
   computeEnvelope,
   envelopeFromBoundaries,
@@ -42,14 +43,9 @@ export default function OverlapPage() {
   const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
-    function pick() {
-      const voices = window.speechSynthesis.getVoices();
-      const en = voices.filter((v) => v.lang.startsWith("en") && v.localService);
-      setVoice(en.find((v) => v.name === "Samantha") ?? en[0] ?? null);
-    }
+    const pick = () => setVoice(pickEnglishVoice());
     pick();
-    window.speechSynthesis.addEventListener("voiceschanged", pick);
-    return () => window.speechSynthesis.removeEventListener("voiceschanged", pick);
+    return onVoicesChanged(pick);
   }, []);
 
   useEffect(() => {
@@ -93,6 +89,7 @@ export default function OverlapPage() {
     const boundaries: WordBoundary[] = [];
     const utterance = new SpeechSynthesisUtterance(text);
     if (voice) utterance.voice = voice;
+    utterance.lang = voice?.lang ?? "en-US";
     utterance.rate = 1;
 
     let speakStart = 0;

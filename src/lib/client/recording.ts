@@ -17,19 +17,32 @@ const TAIL_MS = 1800;
 /** API が受け付ける包絡の長さ（5分 = 30000 フレーム） */
 const MAX_FRAMES = 30_000;
 
-/** 端末にある英語の声を選ぶ（無ければ null で、ブラウザの既定の声になる） */
+/**
+ * macOS の効果音的な声（歌う・ささやく・ロボット声など）。lang は en-US だが、お手本には向かない
+ */
+const NOVELTY_VOICES = new Set([
+  "Albert", "Bad News", "Bahh", "Bells", "Boing", "Bubbles", "Cellos", "Good News", "Jester",
+  "Organ", "Superstar", "Trinoids", "Whisper", "Wobble", "Zarvox", "Deranged", "Hysterical", "Pipe Organ",
+]);
+
+/**
+ * お手本に使える英語の声の一覧。日本語など他の言語の声は含めない
+ * （日本語の声で英文を読むと、カタカナ読みのお手本になってしまう）。
+ * 端末内の声・米英語を先に並べる。
+ */
+export function englishVoices(): SpeechSynthesisVoice[] {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return [];
+  const rank = (v: SpeechSynthesisVoice) => (v.localService ? 0 : 2) + (v.lang.replace("_", "-") === "en-US" ? 0 : 1);
+  return window.speechSynthesis
+    .getVoices()
+    .filter((v) => /^en([-_]|$)/i.test(v.lang) && !NOVELTY_VOICES.has(v.name.replace(/\s*\(.*\)$/, "")))
+    .sort((a, b) => rank(a) - rank(b));
+}
+
+/** 端末にある英語の声を選ぶ（無ければ null で、lang="en-US" の指定だけでブラウザに選ばせる） */
 export function pickEnglishVoice(): SpeechSynthesisVoice | null {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
-  const voices = window.speechSynthesis.getVoices();
-  const en = voices.filter((v) => v.lang.startsWith("en"));
-  const local = en.filter((v) => v.localService);
-  return (
-    local.find((v) => v.name === "Samantha") ??
-    local.find((v) => v.lang === "en-US") ??
-    local[0] ??
-    en[0] ??
-    null
-  );
+  const en = englishVoices();
+  return en.find((v) => v.localService && v.name === "Samantha") ?? en[0] ?? null;
 }
 
 /** 声の一覧は非同期に読み込まれるので、変わったら呼び直す */
@@ -68,6 +81,8 @@ export interface OverlapRecording {
   reference: Envelope;
   user: Envelope;
   durationMs: number;
+  /** 読み上げの語ごとの開始時刻。音の変化（連結など）の判定に使う。API には送らない */
+  boundaries: WordBoundary[];
 }
 
 /** API に送る前に、長さを上限で切り、小数を丸めて送る量を減らす */
@@ -154,7 +169,7 @@ export async function recordOverlap(
     if (user.frames.length === 0 || reference.frames.length === 0) {
       throw new RecordingError("録音が短すぎました。もう一度お試しください。");
     }
-    return { reference: compact(reference), user: compact(user), durationMs };
+    return { reference: compact(reference), user: compact(user), durationMs, boundaries };
   } finally {
     stream.getTracks().forEach((t) => t.stop());
   }
