@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * 英文に「音の変化」（連結・同化・脱落）の印を付けて表示する。
  *
@@ -5,6 +7,7 @@
  * - 脱落: 飲み込む語末の文字を薄くする
  * - 録音の判定で途切れていた所（broken）は赤で示す
  */
+import { useSyncExternalStore } from "react";
 import {
   SOUND_CHANGE_LABELS,
   findSoundChanges,
@@ -76,10 +79,59 @@ export function SoundChangeText({
   );
 }
 
-/** 印の意味 */
+// ---------------------------------------------------------------------------
+// 解説（読み方のコツの一覧）を表示するかどうか。端末ごとに覚えておく
+// ---------------------------------------------------------------------------
+
+const HINTS_KEY = "shadowing:sound-change-hints";
+const HINTS_EVENT = "shadowing:sound-change-hints";
+
+function readHints(): boolean {
+  try {
+    return localStorage.getItem(HINTS_KEY) !== "hidden";
+  } catch {
+    return true;
+  }
+}
+
+function subscribeHints(onChange: () => void) {
+  window.addEventListener(HINTS_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(HINTS_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+/** 解説を表示するか（既定は表示）と、その切り替え。同じ画面の他の一覧にもすぐ反映する */
+export function useSoundChangeHints(): [boolean, (show: boolean) => void] {
+  const show = useSyncExternalStore(subscribeHints, readHints, () => true);
+  const set = (next: boolean) => {
+    try {
+      if (next) localStorage.removeItem(HINTS_KEY);
+      else localStorage.setItem(HINTS_KEY, "hidden");
+    } catch {
+      // 保存できなくても、この画面の表示は切り替える
+    }
+    window.dispatchEvent(new Event(HINTS_EVENT));
+  };
+  return [show, set];
+}
+
+/** 「解説を隠す / 表示」の切り替えボタン */
+export function SoundChangeHintsToggle() {
+  const [show, setShow] = useSoundChangeHints();
+  return (
+    <button type="button" onClick={() => setShow(!show)} className="text-xs text-blue-500 hover:underline">
+      {show ? "解説を隠す" : "解説を表示"}
+    </button>
+  );
+}
+
+/** 印の意味（と、解説の表示切り替え） */
 export function SoundChangeLegend() {
   return (
-    <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
       <span>
         <span className="font-semibold text-blue-500">‿</span> 連結（つなげる）
       </span>
@@ -89,13 +141,26 @@ export function SoundChangeLegend() {
       <span>
         <span className="opacity-35">d</span> 脱落（ほとんど発音しない）
       </span>
+      <span className="ml-auto">
+        <SoundChangeHintsToggle />
+      </span>
     </p>
   );
 }
 
-/** 文の中の音の変化と読み方の一覧 */
-export function SoundChangeList({ changes }: { changes: Array<SoundChange | SoundChangeCheck> }) {
-  if (changes.length === 0) return null;
+/**
+ * 文の中の音の変化と読み方の一覧。解説を隠す設定のときは出さない
+ * （force: 録音の判定で途切れていた所のように、隠さずに見せたいもの）
+ */
+export function SoundChangeList({
+  changes,
+  force = false,
+}: {
+  changes: Array<SoundChange | SoundChangeCheck>;
+  force?: boolean;
+}) {
+  const [show] = useSoundChangeHints();
+  if (changes.length === 0 || (!show && !force)) return null;
   return (
     <ul className="space-y-1 text-sm">
       {changes.map((c) => {

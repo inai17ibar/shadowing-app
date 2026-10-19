@@ -1,10 +1,13 @@
 import type { D1Database } from "@/lib/db/d1";
+import type { R2Bucket } from "@/lib/media";
 
 // wrangler.jsonc のバインディングと `wrangler secret` の型。
 // OpenNext が宣言している CloudflareEnv に足す。
 declare global {
   interface CloudflareEnv {
     DB: D1Database;
+    /** 教材の収録音声（R2）。scripts/import-voa.ts で入れ、/media/... で配信する */
+    MEDIA?: R2Bucket;
     /** アクセストークン(HS256)の署名鍵。32バイト以上のランダム値 */
     AUTH_SECRET?: string;
     /** iOSアプリの Bundle ID（Sign in with Apple の aud） */

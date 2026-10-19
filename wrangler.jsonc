@@ -26,6 +26,8 @@
       "migrations_dir": "migrations"
     }
   ],
+  // 教材の収録音声。`wrangler r2 bucket create shadowing-media` で作る（scripts/import-voa.ts が入れる）
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "shadowing-media" }],
   // 認証エンドポイント: 1つのIPから1分あたり20回まで
   "ratelimits": [
     { "name": "AUTH_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } }

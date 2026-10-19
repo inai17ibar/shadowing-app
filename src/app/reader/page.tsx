@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { englishVoices, pickEnglishVoice } from "@/lib/client/recording";
 import { findSoundChanges } from "@/lib/sound-changes";
-import { SoundChangeList, SoundChangeText } from "@/components/practice/SoundChangeText";
+import { SoundChangeHintsToggle, SoundChangeList, SoundChangeText } from "@/components/practice/SoundChangeText";
 
 interface SavedTextMeta {
   id: number;
@@ -873,7 +873,10 @@ function ReaderInner() {
           </p>
           {sentences[currentIdx] && findSoundChanges(sentences[currentIdx]).length > 0 && (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-gray-500">この文の音の変化</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-gray-500">この文の音の変化</p>
+                <SoundChangeHintsToggle />
+              </div>
               <p className="text-[15px] leading-relaxed text-gray-900">
                 <SoundChangeText text={sentences[currentIdx]} />
               </p>

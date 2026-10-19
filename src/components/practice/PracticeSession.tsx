@@ -15,7 +15,9 @@ import {
   RecordingError,
   onVoicesChanged,
   pickEnglishVoice,
+  playAudio,
   recordOverlap,
+  recordOverlapWithAudio,
   speak,
   stopSpeaking,
 } from "@/lib/client/recording";
@@ -32,6 +34,8 @@ interface LoadedMaterial {
   sentences: Sentence[];
   sourceName: string;
   attribution: string | null;
+  /** 収録音声（人の朗読）。あればお手本は読み上げではなくこれを流す */
+  audioUrl: string | null;
   backHref: string;
 }
 
@@ -67,6 +71,7 @@ async function loadMaterial(materialId: string): Promise<LoadedMaterial> {
       sentences: t.sentences.map((text) => ({ text })),
       sourceName: hostnameOf(t.sourceUrl) ?? "自分の文章",
       attribution: null,
+      audioUrl: null,
       backHref: "/texts",
     };
   }
@@ -78,6 +83,7 @@ async function loadMaterial(materialId: string): Promise<LoadedMaterial> {
     sentences: m.sentences,
     sourceName: m.sourceName,
     attribution: m.attribution,
+    audioUrl: m.audioUrl,
     backHref: `/catalog/${encodeURIComponent(m.id)}`,
   };
 }
@@ -239,6 +245,14 @@ function StepPanel({
 
   const fullText = material.sentences.map((s) => s.text).join(" ");
 
+  /** 収録音声で流せる範囲。全文なら null、文ごとの時刻が無い文なら undefined（読み上げで代用） */
+  function audioRange(which: number | "all") {
+    if (!material.audioUrl) return undefined;
+    if (which === "all") return null;
+    const s = material.sentences[which];
+    return s.startMs !== undefined && s.endMs !== undefined ? { startMs: s.startMs, endMs: s.endMs } : undefined;
+  }
+
   async function play(which: number | "all") {
     if (playing !== null) {
       stopSpeaking();
@@ -246,7 +260,13 @@ function StepPanel({
       return;
     }
     setPlaying(which);
-    await speak(which === "all" ? fullText : material.sentences[which].text, { voice, rate });
+    const range = audioRange(which);
+    try {
+      if (material.audioUrl && range !== undefined) await playAudio(material.audioUrl, range, rate);
+      else await speak(which === "all" ? fullText : material.sentences[which].text, { voice, rate });
+    } catch (err) {
+      setMessage(err instanceof RecordingError ? err.message : errorMessage(err));
+    }
     setPlaying(null);
   }
 
@@ -271,7 +291,11 @@ function StepPanel({
     setMessage("");
     const text = target === null ? fullText : material.sentences[target].text;
     try {
-      const rec = await recordOverlap(text, { voice, rate, onPhase: setPhase });
+      const range = audioRange(target === null ? "all" : target);
+      const rec =
+        material.audioUrl && range !== undefined
+          ? await recordOverlapWithAudio(material.audioUrl, range, { rate, onPhase: setPhase })
+          : await recordOverlap(text, { voice, rate, onPhase: setPhase });
       const { lagMs } = alignmentMetrics(rec.reference, rec.user);
       const soundChecks = checkSoundChanges(text, rec.boundaries, rec.reference, rec.user, lagMs);
       setPhase("sending");
@@ -387,7 +411,7 @@ function StepPanel({
           {step.id === "record" && <p className="text-xs text-gray-500 mb-3">本番録音は全文を通しで録ります。</p>}
           <button onClick={recordAndScore} disabled={busy || !ttsSupported} className={primaryButton}>
             {phase === "recording"
-              ? "読み上げ中… 声を重ねてください"
+              ? "お手本を再生中… 声を重ねてください"
               : phase === "analyzing"
                 ? "解析中…"
                 : phase === "sending"
@@ -396,7 +420,7 @@ function StepPanel({
           </button>
           <p className="text-xs text-gray-400 mt-2">
             音声はサーバーに送りません。端末で声の強弱（包絡）だけを取り出して送ります。
-            {voice ? ` お手本の声: ${voice.name}` : ""}
+            {material.audioUrl ? " お手本: 収録音声（人の声）" : voice ? ` お手本の声: ${voice.name}` : ""}
           </p>
         </div>
       ) : (
@@ -465,7 +489,7 @@ function ScoreCard({ entry, sentences }: { entry: ResultEntry; sentences: Senten
         <div className="mt-4 border-t border-separator pt-3">
           <p className="mb-2 text-sm font-medium text-gray-900">音のつながり</p>
           <p className="mb-2 text-sm text-gray-700">{soundFeedback}</p>
-          <SoundChangeList changes={broken} />
+          <SoundChangeList changes={broken} force />
         </div>
       )}
     </div>

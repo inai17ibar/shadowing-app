@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { api, errorMessage } from "@/lib/client/api";
 import type { Level, MaterialSummary } from "@/components/practice/types";
-import { ErrorBox, LEVEL_LABELS, LevelBadge, Loading, secondaryButton } from "@/components/practice/ui";
+import { ErrorBox, LEVEL_LABELS, LevelBadge, Loading, VoiceBadge, secondaryButton } from "@/components/practice/ui";
 
 interface Page {
   items: MaterialSummary[];
@@ -102,6 +102,7 @@ export default function CatalogPage() {
           >
             <div className="flex items-center gap-2 mb-1">
               <LevelBadge level={m.level} />
+              {m.audioUrl && <VoiceBadge />}
               <span className="text-xs text-gray-400">{m.sourceName}</span>
             </div>
             <h2 className="font-medium text-gray-900 group-hover:text-blue-500 transition-colors">{m.title}</h2>

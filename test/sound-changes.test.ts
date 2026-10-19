@@ -27,6 +27,8 @@ test("t / d / s + you は同化", () => {
 test("語末の破裂音の後に子音が続くと脱落", () => {
   assert.deepEqual(kinds("Good morning"), ["elision:Good‿morning"]);
   assert.deepEqual(kinds("a big game"), ["elision:big‿game"]);
+  // -ng は破裂音ではない
+  assert.deepEqual(kinds("flying machine"), []);
 });
 
 test("him / her / his は h が落ちて連結", () => {

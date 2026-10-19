@@ -723,7 +723,7 @@ components:
         sourceUrl: { type: string }
         license: { $ref: "#/components/schemas/License" }
         attribution: { type: [string, "null"], description: 表示必須の帰属表示（CC BY系） }
-        audioUrl: { type: [string, "null"], description: 無ければ端末のTTSで読み上げる }
+        audioUrl: { type: [string, "null"], description: "収録音声（mp3）。API と同じホストからの相対URL（/media/...）。無ければ端末のTTSで読み上げる" }
         publishedAt: { type: [string, "null"], format: date-time }
         sentenceCount: { type: integer }
 

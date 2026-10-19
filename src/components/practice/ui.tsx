@@ -32,6 +32,11 @@ export function LevelBadge({ level }: { level: Level }) {
   );
 }
 
+/** 収録音声（人の朗読）がある教材の印 */
+export function VoiceBadge() {
+  return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">人の声</span>;
+}
+
 export function Loading({ label = "読み込み中…" }: { label?: string }) {
   return (
     <p className="flex items-center justify-center gap-2 py-12 text-sm text-gray-500">

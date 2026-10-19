@@ -9,6 +9,7 @@ import { SoundChangeLegend, SoundChangeText } from "@/components/practice/SoundC
 import {
   ErrorBox,
   LevelBadge,
+  VoiceBadge,
   Loading,
   Notice,
   card,
@@ -65,6 +66,7 @@ export default function CatalogDetailPage() {
         <>
           <div className="flex items-center gap-2 mt-4 mb-1">
             <LevelBadge level={material.level} />
+            {material.audioUrl && <VoiceBadge />}
             {material.tags.map((t) => (
               <span key={t} className="text-xs text-gray-400">
                 #{t}

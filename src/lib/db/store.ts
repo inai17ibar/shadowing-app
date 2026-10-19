@@ -293,7 +293,8 @@ export function createStore(db: D1Database, { now = () => new Date() } = {}) {
       }
       if (cursor) {
         const [publishedAt, id] = cursor.split("|");
-        where.push("(published_at < ? OR (published_at = ? AND id < ?))");
+        // 同じ時刻に公開したもの（1つの記事のパートなど）は id の昇順で、(1/4) から並べる
+        where.push("(published_at < ? OR (published_at = ? AND id > ?))");
         params.push(publishedAt, publishedAt, id);
       }
       const { results } = await db
@@ -301,7 +302,7 @@ export function createStore(db: D1Database, { now = () => new Date() } = {}) {
           `SELECT id, title, level, description, tags, source_name, source_url, license,
                   attribution, audio_url, published_at, sentence_count
              FROM materials WHERE ${where.join(" AND ")}
-            ORDER BY published_at DESC, id DESC LIMIT ?`,
+            ORDER BY published_at DESC, id ASC LIMIT ?`,
         )
         .bind(...params, limit + 1)
         .all<Row>();

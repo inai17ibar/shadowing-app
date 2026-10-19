@@ -47,3 +47,6 @@ next-env.d.ts
 .wrangler
 .dev.vars
 /cloudflare-env.d.ts
+
+# VOA の取り込み作業用（scripts/import-voa.ts）
+/.voa-import

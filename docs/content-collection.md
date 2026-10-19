@@ -58,8 +58,21 @@
 | Project Gutenberg の短編・随筆 | 著作権切れ（米国） | 上級・朗読 | 日本でも保護期間が切れているか確認。Gutenberg の商標表記は外す |
 | LibriVox | パブリックドメイン（音声も） | 朗読シャドーイング。人の声のお手本 | 本文と音声の時刻合わせ（強制アライメント）が必要 |
 
-VOA のアーカイブは `SOURCES` に `active: false` で登録してある。一括取り込み用のスクリプトで、
-ここから取り込んだものも必ず `pending_review` を通す。
+VOA のアーカイブは `scripts/import-voa.ts` で取り込む（手元で実行。ffmpeg と wrangler が必要）。
+
+```bash
+node scripts/import-voa.ts --section 1579 --pages 1 --limit 5                 # .voa-import/ に書き出すだけ
+node scripts/import-voa.ts --section 1579 --pages 1 --limit 5 --apply remote  # 本番の R2 / D1 に入れる
+```
+
+- カテゴリ（`--section`）は `src/lib/voa.ts` の `VOA_SECTIONS`（As It Is、Science & Technology など。動画中心の番組は除く）
+- 本文は署名「I'm ...」まで。署名より後ろ（出典・語彙リスト）はクレジットの確認にだけ使い、
+  AP / Reuters などがあればレビューの注意事項に残す
+- **収録音声（人の朗読）を教材の音声にする**。文ごとの時刻は、文末の長い間と文の長さから動的計画法で合わせる
+  （`src/lib/audio-align.ts`）。合わせ方の確かさが低いものはレビューの注意事項に出す
+- 1記事を約1分のパートに分け、パートごとに mp3（モノラル 64kbps）を切り出して R2 の `shadowing-media` に置く。
+  音声は `/media/voa/<記事番号>-p<n>.mp3` で配信する（Range 対応）
+- 取り込んだものは必ず `pending_review` になる。再生して文と音声がずれていないかを確かめてから公開する
 
 ### 1-c. 既存ライブラリ（`src/lib/library-content.ts`）の扱い
 

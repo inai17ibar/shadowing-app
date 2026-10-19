@@ -303,3 +303,31 @@ function median(values: number[]): number {
   const mid = Math.floor(sorted.length / 2)
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
 }
+
+// ---------------------------------------------------------------------------
+// 収録音声（人の朗読）をお手本にするとき
+// ---------------------------------------------------------------------------
+
+/**
+ * 包絡の一部（文やパートの範囲）を切り出し、その範囲の最大値で正規化し直す。
+ * 記事全体で正規化したままだと、静かに読まれた文の「声が出ている」判定が甘くなるため。
+ */
+export function sliceEnvelope(env: Envelope, startMs: number, endMs: number): Envelope {
+  const from = Math.max(0, Math.floor(startMs / env.hopMs))
+  const to = Math.min(env.frames.length, Math.ceil(endMs / env.hopMs))
+  const frames = env.frames.slice(from, Math.max(from, to))
+  const max = frames.reduce((a, v) => (v > a ? v : a), 0)
+  return { frames: max > 0 ? frames.map((v) => v / max) : frames, hopMs: env.hopMs }
+}
+
+/**
+ * 再生速度を変えたときの包絡にする（rate 0.8 なら 1.25 倍の長さ）。
+ * 音声の playbackRate を変えて流すので、お手本の包絡も同じだけ伸び縮みさせる。
+ */
+export function stretchEnvelope(env: Envelope, rate: number): Envelope {
+  if (rate <= 0 || rate === 1) return env
+  const length = Math.round(env.frames.length / rate)
+  const frames = new Array<number>(length)
+  for (let i = 0; i < length; i++) frames[i] = env.frames[Math.min(env.frames.length - 1, Math.floor(i * rate))]
+  return { frames, hopMs: env.hopMs }
+}

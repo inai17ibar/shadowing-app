@@ -127,7 +127,7 @@ export function findSoundChanges(text: string): SoundChange[] {
           ? `${a.text} の最後の音を ${b.text} の頭に乗せて、1語のように`
           : `間を空けずに、軽く「ワ」「ヤ」の音でつなぐ（go on → ゴウォン）`,
       })
-    } else if (STOPS.has(final) && !VOWELS.has(next[0])) {
+    } else if (STOPS.has(final) && !/ng$/i.test(a.text) && !VOWELS.has(next[0])) {
       changes.push({
         kind: 'elision',
         wordIndex: i,
