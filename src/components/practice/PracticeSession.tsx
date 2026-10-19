@@ -49,7 +49,7 @@ interface ResultEntry {
   soundChecks: SoundChangeCheck[];
 }
 
-const RATES = [0.6, 0.8, 1, 1.2];
+const RATES = [0.6, 0.8, 1, 1.2, 1.3, 1.5, 1.8, 2];
 /** スクリプトを最初から見せるステップ（シャドテンの手順どおり、他は見ないで練習する） */
 const SCRIPT_VISIBLE: StepId[] = ["script", "overlapping"];
 

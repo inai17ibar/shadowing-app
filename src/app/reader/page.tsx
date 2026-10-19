@@ -670,7 +670,7 @@ function ReaderInner() {
   // =========================================================================
   // Render: playback view
   // =========================================================================
-  const speeds = [0.5, 0.75, 1, 1.25, 1.5];
+  const speeds = [0.5, 0.75, 1, 1.25, 1.5, 1.8, 2];
   const progress = Math.round((doneSet.size / sentences.length) * 100);
 
   return (
