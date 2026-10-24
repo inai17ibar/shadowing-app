@@ -1,0 +1,835 @@
+openapi: 3.1.0
+info:
+  title: Shadowing App API
+  version: "1.0.0"
+  description: |
+    iOSアプリ向けのAPI（`/api/v1`）。
+
+    ## 認証
+    初回起動で `POST /auth/anonymous` を呼んでトークンを得る（ログインなしで練習できる）。
+    本登録は Apple / Google / メールのワンタイムコード / パスキーのいずれか。
+
+    サインイン系のエンドポイントは、今のトークンを付けて呼ぶと次のように振る舞う
+    （`created` / `linked` / `mergedAnonymous` で結果がわかる）。
+    - その方法が未使用 → 今のアカウントに追加（匿名なら本登録になる）
+    - その方法が既に誰かのもの・今が匿名 → 匿名の記録をそのアカウントに統合してサインイン
+    - その方法が既に誰かのもの・今が別の本登録アカウント → 409（勝手に切り替えない）
+
+    ## Web版（Cookie）
+    Web版は認証系（`/auth/anonymous`・各サインイン・`/auth/refresh`）を `X-Client: web` を付けて呼ぶ。
+    トークンは本文に入らず、httpOnly・SameSite=Strict の Cookie（`sa_access` は /api/v1、`sa_refresh` は /api/v1/auth）で返る。
+    以後は Cookie だけで認証され、`/auth/refresh` と `/auth/logout` は本文を空にして呼べばよい。
+    Cookie で認証した書き込み系のリクエストは、Origin が同じでなければ 403 にする（CSRF 対策）。
+    使えるログイン方法は `GET /auth/methods` で取れる。
+
+    ## オフライン
+    練習記録は端末で UUID を振って保存し、通信できるときに `POST /attempts/batch` でまとめて送る。
+    同じ id は二重に保存されない。別の端末の記録は `GET /me/attempts` で差分を取る。
+    アクセストークン（1時間）を `Authorization: Bearer <token>` で送り、
+    期限が切れたら `POST /auth/refresh` でリフレッシュトークン（90日・使い捨て）と交換する。
+
+    ## 音声の扱い
+    音声はサーバーに送らない。端末で録音し、エネルギー包絡（10ms刻み・0..1）を作って
+    `POST /attempts` に送る。点数はサーバーが `src/lib/overlap.ts` と同じ式で出す。
+
+    ## エラー
+    すべて `{ "error": { "code", "message" } }`。`message` は利用者に見せてよい日本語。
+servers:
+  - url: http://localhost:3000/api/v1
+security:
+  - bearer: []
+
+paths:
+  /health:
+    get:
+      summary: 疎通確認と、必要な最低アプリバージョン
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: ok }
+                  apiVersion: { type: integer }
+                  minIosAppVersion: { type: string, example: "1.0.0" }
+                  database: { type: string, enum: [d1, unbound] }
+
+  /auth/anonymous:
+    post:
+      summary: 匿名アカウントを作成してトークンを発行
+      security: []
+      responses:
+        "201": { $ref: "#/components/responses/Tokens" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /auth/apple:
+    post:
+      summary: Sign in with Apple（匿名トークン付きなら本登録に切り替え）
+      description: |
+        authorizationCode を送ると、退会時に Apple 側の連携を失効させられるようになる。
+      security: [{}, { bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identityToken]
+              properties:
+                identityToken: { type: string }
+                authorizationCode: { type: string }
+                nonce: { type: string, description: リクエスト時に SHA-256 して Apple に渡した元の値 }
+      responses:
+        "200": { $ref: "#/components/responses/SignIn" }
+        "201": { $ref: "#/components/responses/SignIn" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /auth/google:
+    post:
+      summary: Google ログイン（iOS の Google Sign-In SDK の ID トークン）
+      security: [{}, { bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idToken]
+              properties:
+                idToken: { type: string }
+                nonce: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/SignIn" }
+        "201": { $ref: "#/components/responses/SignIn" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /auth/email/start:
+    post:
+      summary: メールにワンタイムコード（6桁・10分）を送る
+      description: 登録の有無にかかわらず 202 を返す。同じアドレスへの再送は60秒空ける（429）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [email], properties: { email: { type: string, format: email } } }
+      responses:
+        "202": { description: 送信した }
+        "400": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /auth/email/verify:
+    post:
+      summary: ワンタイムコードでサインイン（5回間違えると無効）
+      security: [{}, { bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code]
+              properties:
+                email: { type: string, format: email }
+                code: { type: string, pattern: "^[0-9]{6}$" }
+      responses:
+        "200": { $ref: "#/components/responses/SignIn" }
+        "201": { $ref: "#/components/responses/SignIn" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /auth/passkey/register/options:
+    post:
+      summary: パスキー登録の準備（サインイン中の利用者に追加）
+      responses:
+        "200":
+          description: options を ASAuthorizationPlatformPublicKeyCredentialProvider に渡す
+          content:
+            application/json:
+              schema: { type: object, properties: { challengeId: { type: string }, options: { type: object } } }
+
+  /auth/passkey/register/verify:
+    post:
+      summary: パスキーを保存（匿名なら本登録になる）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeId, response]
+              properties:
+                challengeId: { type: string }
+                response: { type: object, description: WebAuthn の RegistrationResponseJSON }
+                name: { type: string, description: 例 "iPhone" }
+      responses:
+        "201": { description: 保存した }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /auth/passkey/login/options:
+    post:
+      summary: パスキーでのサインインの準備（端末に保存されたパスキーから選ばせる）
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, properties: { challengeId: { type: string }, options: { type: object } } }
+
+  /auth/passkey/login/verify:
+    post:
+      summary: パスキーでサインイン
+      security: [{}, { bearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challengeId, response]
+              properties:
+                challengeId: { type: string }
+                response: { type: object, description: WebAuthn の AuthenticationResponseJSON }
+      responses:
+        "200": { $ref: "#/components/responses/SignIn" }
+        "401": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /me/identities:
+    get:
+      summary: 登録済みのログイン方法
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isAnonymous: { type: boolean }
+                  identities:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        provider: { type: string, enum: [apple, google, email] }
+                        email: { type: [string, "null"] }
+                        createdAt: { type: string, format: date-time }
+                  passkeys:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        createdAt: { type: string, format: date-time }
+                        lastUsedAt: { type: [string, "null"], format: date-time }
+
+  /me/identities/{provider}:
+    delete:
+      summary: ログイン方法を外す（最後の1つは 409）
+      parameters:
+        - { name: provider, in: path, required: true, schema: { type: string, enum: [apple, google, email] } }
+      responses:
+        "204": { description: 外した }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /me/passkeys/{id}:
+    delete:
+      summary: パスキーを外す（最後のログイン方法なら 409）
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: 外した }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /auth/methods:
+    get:
+      summary: このサーバーで使えるログイン方法（Web版のログイン画面用）
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  email: { type: boolean }
+                  google:
+                    oneOf:
+                      - type: object
+                        properties:
+                          webClientId: { type: string, description: Google Identity Services に渡すクライアントID }
+                      - type: "null"
+                  passkey: { type: boolean }
+                  apple: { type: boolean, description: Web版の Sign in with Apple は未対応（常に false） }
+
+  /auth/refresh:
+    post:
+      summary: リフレッシュトークンを新しいペアと交換（古いものは無効）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [refreshToken], properties: { refreshToken: { type: string } } }
+      responses:
+        "200": { $ref: "#/components/responses/Tokens" }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /auth/logout:
+    post:
+      summary: リフレッシュトークンを無効化
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { refreshToken: { type: string } } }
+      responses:
+        "204": { description: OK }
+
+  /steps:
+    get:
+      summary: 練習ステップの定義（文言はサーバーから配る）
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  steps: { type: array, items: { $ref: "#/components/schemas/PracticeStep" } }
+                  masteryScore: { type: integer, example: 85 }
+                  maxDaysPerMaterial: { type: integer, example: 7 }
+
+  /materials:
+    get:
+      summary: 公開済み教材の一覧
+      security: []
+      parameters:
+        - { name: level, in: query, schema: { $ref: "#/components/schemas/Level" } }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: cursor, in: query, schema: { type: string }, description: 前ページの nextCursor }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/MaterialSummary" } }
+                  nextCursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /materials/{id}:
+    get:
+      summary: 教材の本文（文ごと）と出典
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Material" }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /me:
+    get:
+      summary: 自分のプロフィール（初回で既定値を作成）
+      responses:
+        "200": { $ref: "#/components/responses/Me" }
+        "401": { $ref: "#/components/responses/Error" }
+    patch:
+      summary: レベル・1日の目標・タイムゾーンを変更
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                level: { $ref: "#/components/schemas/Level" }
+                dailyGoalMinutes: { type: integer, minimum: 5, maximum: 180 }
+                timeZone: { type: string, example: Asia/Tokyo }
+      responses:
+        "200": { $ref: "#/components/responses/Me" }
+        "400": { $ref: "#/components/responses/Error" }
+    delete:
+      summary: アカウントと全データを削除（App Store Review Guideline 5.1.1(v)）
+      responses:
+        "204": { description: 削除した }
+        "401": { $ref: "#/components/responses/Error" }
+
+  /me/today:
+    get:
+      summary: 今日の課題（必要なら次の教材へ進める）
+      description: |
+        シャドテン式に、1つの教材を「本番録音で85点以上」か「7日経過」まで続ける。
+        習得した当日は同じ教材のまま、翌日に次へ進む。レベルも自動で上下する。
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/TodayActive"
+                  - type: object
+                    properties:
+                      status: { const: exhausted }
+                      message: { type: string }
+                      streak: { type: integer }
+
+  /me/progress:
+    get:
+      summary: 連続日数・練習量・本番スコアの推移
+      parameters:
+        - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 90, default: 14 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  level: { $ref: "#/components/schemas/Level" }
+                  streak: { type: integer }
+                  totals:
+                    type: object
+                    properties:
+                      attempts: { type: integer }
+                      practiceMinutes: { type: integer }
+                      materials: { type: integer }
+                  history:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date: { type: string, format: date }
+                        attempts: { type: integer }
+                        bestRecordScore: { type: [integer, "null"] }
+
+  /attempts:
+    post:
+      summary: 練習1回ぶんを記録（採点ステップはサーバーで点数を出す）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [materialId, step]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                  description: 端末が作る UUID（冪等キー）。同じ id の再送は二重に保存されない
+                practicedAt:
+                  type: string
+                  format: date-time
+                  description: 練習した時刻（オフライン分）。30日以内。省略時は受信時刻
+                materialId:
+                  type: string
+                  description: カタログ教材のid、または自分の文章なら `text:<id>`
+                step: { $ref: "#/components/schemas/StepId" }
+                sentenceIndex: { type: integer, description: 文ごとの練習なら何文目か。通しなら省略 }
+                durationMs: { type: integer }
+                envelopes:
+                  type: object
+                  description: 推奨。お手本と自分の包絡
+                  properties:
+                    reference: { $ref: "#/components/schemas/Envelope" }
+                    user: { $ref: "#/components/schemas/Envelope" }
+                metrics:
+                  $ref: "#/components/schemas/OverlapMetrics"
+            examples:
+              unscored: { value: { materialId: voa-simple-english-1, step: listen } }
+              scored:
+                value:
+                  materialId: voa-simple-english-1
+                  step: shadowing
+                  sentenceIndex: 2
+                  envelopes:
+                    reference: { hopMs: 10, frames: [0, 0.8, 0.9, 0.2] }
+                    user: { hopMs: 10, frames: [0, 0, 0.7, 0.9] }
+      responses:
+        "201":
+          description: 記録した
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AttemptResult" }
+        "200":
+          description: 同じ id を既に受け取っていた（保存済みの内容を返す）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AttemptResult" }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+
+  /attempts/batch:
+    post:
+      summary: オフラインで溜めた練習記録をまとめて送る（最大100件、id 必須）
+      description: |
+        1件ずつ独立に処理する。status ごとの端末側の扱い:
+        created / duplicate は送信済みとして消す。rejected は直せないので消す。conflict は id を振り直して再送する。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [attempts]
+              properties:
+                attempts: { type: array, maxItems: 100, items: { type: object, description: POST /attempts と同じ形（id 必須） } }
+      responses:
+        "200":
+          description: 件ごとの結果
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        index: { type: integer }
+                        id: { type: [string, "null"] }
+                        status: { type: string, enum: [created, duplicate, rejected, conflict] }
+                        attempt: { $ref: "#/components/schemas/Attempt" }
+                        feedback: { type: [string, "null"] }
+                        error:
+                          type: object
+                          properties: { code: { type: string }, message: { type: string } }
+
+  /me/attempts:
+    get:
+      summary: 練習記録の差分同期（サーバーが受け取った順）
+      parameters:
+        - { name: cursor, in: query, schema: { type: string }, description: 前回の nextCursor }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 200 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Attempt" } }
+                  nextCursor: { type: [string, "null"], description: 次回これを渡す（新着が無くても保存しておく） }
+                  hasMore: { type: boolean }
+
+  /me/texts:
+    get:
+      summary: 自分で取り込んだ文章の一覧（本人だけが見られる）
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        title: { type: string }
+                        sourceUrl: { type: string }
+                        createdAt: { type: string, format: date-time }
+    post:
+      summary: 文章を取り込む（貼り付け or URL）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  required: [text]
+                  properties: { text: { type: string, maxLength: 20000 }, title: { type: string } }
+                - type: object
+                  required: [url]
+                  properties: { url: { type: string, format: uri }, title: { type: string } }
+      responses:
+        "201":
+          description: 取り込んだ
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserText" }
+        "400": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+
+  /me/texts/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      summary: 取り込んだ文章
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserText" }
+        "404": { $ref: "#/components/responses/Error" }
+    delete:
+      summary: 取り込んだ文章を削除
+      responses:
+        "204": { description: 削除した }
+        "404": { $ref: "#/components/responses/Error" }
+
+  /reports:
+    post:
+      summary: 教材・アプリの問題を通報（誤り・不適切・著作権）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetType, reason]
+              properties:
+                targetType: { type: string, enum: [material, user_text, app] }
+                targetId: { type: string }
+                reason: { type: string, enum: [inappropriate, copyright, incorrect, audio_problem, other] }
+                detail: { type: string, maxLength: 2000 }
+      responses:
+        "201": { description: 受け付けた }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /cron/collect:
+    get:
+      summary: "[内部] 登録済み配信元から教材候補を収集（CRON_SECRET で認証）"
+      responses:
+        "200": { description: 収集結果 }
+        "401": { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: /auth/* が発行するアクセストークン（HS256 JWT）
+
+  responses:
+    Error:
+      description: エラー
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: object
+                properties:
+                  code:
+                    type: string
+                    enum: [bad_request, unauthorized, forbidden, not_found, conflict, unprocessable, rate_limited, not_configured, upstream_error, internal]
+                  message: { type: string }
+    SignIn:
+      description: サインインした（新規作成時は 201）
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Tokens"
+              - type: object
+                properties:
+                  created: { type: boolean, description: 新しいアカウントを作った }
+                  linked: { type: boolean, description: 今のアカウントにこの方法を追加した }
+                  mergedAnonymous: { type: boolean, description: 匿名の記録をこのアカウントに統合した }
+    Tokens:
+      description: OK
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Tokens" }
+    Me:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              id: { type: string }
+              isAnonymous: { type: boolean }
+              profile: { $ref: "#/components/schemas/Profile" }
+
+  schemas:
+    Tokens:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresIn: { type: integer, description: アクセストークンの有効秒数 }
+        user:
+          type: object
+          properties:
+            id: { type: string }
+            isAnonymous: { type: boolean }
+    Level: { type: string, enum: [beginner, intermediate, advanced] }
+    StepId: { type: string, enum: [listen, script, mumbling, overlapping, shadowing, record] }
+    License:
+      type: string
+      enum: [original, public-domain, cc0, cc-by, cc-by-sa, cc-by-nc, cc-by-nd, cc-by-nc-nd, licensed, unknown]
+
+    PracticeStep:
+      type: object
+      properties:
+        id: { $ref: "#/components/schemas/StepId" }
+        title: { type: string }
+        instruction: { type: string }
+        minutes: { type: integer }
+        scored: { type: boolean }
+
+    Sentence:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string }
+        translation: { type: string }
+        startMs: { type: integer, description: 収録音声がある教材のみ }
+        endMs: { type: integer }
+
+    MaterialSummary:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        level: { $ref: "#/components/schemas/Level" }
+        description: { type: string }
+        tags: { type: array, items: { type: string } }
+        sourceName: { type: string }
+        sourceUrl: { type: string }
+        license: { $ref: "#/components/schemas/License" }
+        attribution: { type: [string, "null"], description: 表示必須の帰属表示（CC BY系） }
+        audioUrl: { type: [string, "null"], description: "収録音声（mp3）。API と同じホストからの相対URL（/media/...）。無ければ端末のTTSで読み上げる" }
+        publishedAt: { type: [string, "null"], format: date-time }
+        sentenceCount: { type: integer }
+
+    Material:
+      allOf:
+        - $ref: "#/components/schemas/MaterialSummary"
+        - type: object
+          properties:
+            sentences: { type: array, items: { $ref: "#/components/schemas/Sentence" } }
+
+    Profile:
+      type: object
+      properties:
+        level: { $ref: "#/components/schemas/Level" }
+        dailyGoalMinutes: { type: integer }
+        timeZone: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    Envelope:
+      type: object
+      required: [hopMs, frames]
+      properties:
+        hopMs: { type: integer, const: 10 }
+        frames:
+          type: array
+          maxItems: 30000
+          items: { type: number, minimum: 0, maximum: 1 }
+
+    OverlapMetrics:
+      type: object
+      required: [lagMs, rhythm, rateRatio, coverage]
+      properties:
+        lagMs: { type: number, description: 追随の遅れ（正なら学習者が後ろ） }
+        rhythm: { type: number, minimum: 0, maximum: 1 }
+        rateRatio: { type: number, description: 1.0でお手本と同じ速さ }
+        coverage: { type: number, minimum: 0, maximum: 1 }
+
+    AttemptResult:
+      type: object
+      properties:
+        attempt: { $ref: "#/components/schemas/Attempt" }
+        feedback: { type: [string, "null"], description: 日本語のひとこと }
+        duplicate: { type: boolean }
+
+    Attempt:
+      type: object
+      properties:
+        id: { type: string }
+        materialId: { type: string }
+        step: { $ref: "#/components/schemas/StepId" }
+        sentenceIndex: { type: [integer, "null"] }
+        score: { type: [integer, "null"] }
+        lagMs: { type: [number, "null"] }
+        rhythm: { type: [number, "null"] }
+        rateRatio: { type: [number, "null"] }
+        coverage: { type: [number, "null"] }
+        durationMs: { type: [integer, "null"] }
+        createdAt: { type: string, format: date-time, description: 練習した時刻 }
+        receivedAt: { type: string, format: date-time, description: サーバーが受け取った時刻 }
+
+    TodayStep:
+      allOf:
+        - $ref: "#/components/schemas/PracticeStep"
+        - type: object
+          properties:
+            done: { type: boolean }
+            bestScore: { type: [integer, "null"] }
+
+    TodayActive:
+      type: object
+      properties:
+        status: { const: active }
+        date: { type: string, format: date }
+        material:
+          type: object
+          properties:
+            id: { type: string }
+            title: { type: string }
+            level: { $ref: "#/components/schemas/Level" }
+            sentenceCount: { type: integer }
+            audioUrl: { type: [string, "null"] }
+        advancedReason: { type: [string, "null"], enum: [mastered, expired, none, null] }
+        levelChanged: { type: boolean }
+        level: { $ref: "#/components/schemas/Level" }
+        materialId: { type: string }
+        day: { type: integer, description: この教材の何日目か }
+        steps: { type: array, items: { $ref: "#/components/schemas/TodayStep" } }
+        nextStep: { oneOf: [{ $ref: "#/components/schemas/StepId" }, { type: "null" }] }
+        todayRecordScore: { type: [integer, "null"] }
+        weakSentences:
+          type: array
+          description: 重ねられていない文（プロ添削の「ここが言えていない」の代わり）
+          items:
+            type: object
+            properties:
+              sentenceIndex: { type: integer }
+              averageScore: { type: integer }
+              attempts: { type: integer }
+        streak: { type: integer }
+        goalMinutes: { type: integer }
+
+    UserText:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        sourceUrl: { type: string }
+        sentences: { type: array, items: { type: string } }
+        createdAt: { type: string, format: date-time }

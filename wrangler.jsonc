@@ -1,0 +1,50 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "shadowing-app",
+  // カスタムWorker: OpenNextが生成した fetch に、定期収集の scheduled を足したもの
+  "main": "worker.ts",
+  "compatibility_date": "2026-10-01",
+  // global_fetch_strictly_public: fetch がプライベートIPに届かない。URL取り込みのSSRF対策の二重化
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    { "binding": "WORKER_SELF_REFERENCE", "service": "shadowing-app" }
+  ],
+  // 教材の定期収集（UTC 21:00 = JST 6:00）
+  "triggers": {
+    "crons": ["0 21 * * *"]
+  },
+  // データベース。`wrangler d1 create shadowing-app` で作り、出力された database_id に置き換える
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "shadowing-app",
+      "database_id": "2e9cb3fd-8acb-469e-87c7-09472304efb5",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // 教材の収録音声。`wrangler r2 bucket create shadowing-media` で作る（scripts/import-voa.ts が入れる）
+  "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "shadowing-media" }],
+  // 認証エンドポイント: 1つのIPから1分あたり20回まで
+  "ratelimits": [
+    { "name": "AUTH_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } }
+  ],
+  // メールのワンタイムコードの送信。送信元ドメインは `wrangler email sending enable <domain>` で有効にする
+  "send_email": [{ "name": "EMAIL" }],
+  "vars": {
+    "MIN_IOS_APP_VERSION": "1.0.0",
+    // パスキー: 今は workers.dev。独自ドメインにしたら置き換える。iOS の Associated Domains（webcredentials:）と一致させる
+    "PASSKEY_RP_ID": "shadowing-app.inai17ibar.workers.dev",
+    "PASSKEY_RP_NAME": "Shadowing",
+    // 空のあいだはメールのコードでのログインを出さない。送信元ドメインを有効にしたら、そのドメインのアドレスにする
+    "EMAIL_FROM": ""
+  },
+  // 秘密情報は `wrangler secret put <NAME>` で入れる:
+  //   AUTH_SECRET, APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY,
+  //   GOOGLE_CLIENT_IDS, AUTH_REVIEW_EMAIL, AUTH_REVIEW_CODE,
+  //   CRON_SECRET, YOUTUBE_DATA_API_KEY, ANTHROPIC_API_KEY
+  "observability": { "enabled": true }
+}

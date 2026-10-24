@@ -41,3 +41,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# cloudflare
+.open-next
+.wrangler
+.dev.vars
+/cloudflare-env.d.ts
+
+# VOA の取り込み作業用（scripts/import-voa.ts）
+/.voa-import

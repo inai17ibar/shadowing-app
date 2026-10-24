@@ -1,57 +1,15 @@
 import { NextResponse } from "next/server";
-import { supabase, supabaseEnabled } from "@/lib/supabase";
-
-// ---------------------------------------------------------------------------
-// In-memory fallback for local dev (when Supabase is not configured)
-// We stash the store on globalThis so every route in this process shares it.
-// ---------------------------------------------------------------------------
-interface SavedText {
-  id: number;
-  title: string;
-  source_url: string;
-  paragraphs: string[];
-  created_at: string;
-}
-
-const g = globalThis as unknown as {
-  __memoryStore?: SavedText[];
-  __memoryNextId?: number;
-};
-if (!g.__memoryStore) {
-  g.__memoryStore = [];
-}
-if (!g.__memoryNextId) {
-  g.__memoryNextId = 1;
-}
-const memoryStore = g.__memoryStore;
+import { getStore } from "@/lib/api/env";
 
 // ---------------------------------------------------------------------------
 // GET /api/texts  –  list saved texts
 // ---------------------------------------------------------------------------
 export async function GET() {
-  if (supabaseEnabled()) {
-    const { data, error } = await supabase
-      .from("saved_texts")
-      .select("id, title, source_url, created_at")
-      .order("id", { ascending: false });
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    return NextResponse.json(data);
+  try {
+    return NextResponse.json(await getStore().listSavedTexts());
+  } catch (err) {
+    return NextResponse.json({ error: message(err) }, { status: 500 });
   }
-
-  // In-memory fallback
-  const list = memoryStore
-    .map(({ id, title, source_url, created_at }) => ({
-      id,
-      title,
-      source_url,
-      created_at,
-    }))
-    .sort((a, b) => b.id - a.id);
-
-  return NextResponse.json(list);
 }
 
 // ---------------------------------------------------------------------------
@@ -77,29 +35,14 @@ export async function POST(request: Request) {
     );
   }
 
-  if (supabaseEnabled()) {
-    const { data, error } = await supabase
-      .from("saved_texts")
-      .insert({ title, source_url, paragraphs })
-      .select("id")
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ id: data.id }, { status: 201 });
+  try {
+    const id = await getStore().insertSavedText({ title, source_url, paragraphs });
+    return NextResponse.json({ id }, { status: 201 });
+  } catch (err) {
+    return NextResponse.json({ error: message(err) }, { status: 500 });
   }
+}
 
-  // In-memory fallback
-  const id = g.__memoryNextId!++;
-
-  memoryStore.push({
-    id,
-    title,
-    source_url,
-    paragraphs,
-    created_at: new Date().toISOString(),
-  });
-
-  return NextResponse.json({ id }, { status: 201 });
+function message(err: unknown) {
+  return err instanceof Error ? err.message : "Unknown error";
 }

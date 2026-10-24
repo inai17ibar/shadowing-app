@@ -51,7 +51,7 @@ export default function YouTubePage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10 animate-fade-in">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">YouTube動画</h1>
+      <h1 className="text-[32px] leading-tight font-bold tracking-tight text-gray-900 mb-2">YouTube動画</h1>
       <p className="text-gray-500 text-sm mb-6">
         動画を検索してシャドーイング練習しましょう
       </p>
@@ -64,13 +64,13 @@ export default function YouTubePage() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="英語のスピーチ、TEDトーク、ニュース..."
           aria-label="YouTube動画検索"
-          className="flex-1 border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[var(--brand-from)] focus:border-transparent transition-shadow"
+          className="flex-1 border-0 bg-gray-100 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
         />
         <button
           type="submit"
           disabled={loading}
           aria-label="検索"
-          className="bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white px-6 py-3 rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-from)] focus-visible:ring-offset-2"
+          className="bg-blue-500 text-white px-6 py-3 rounded-full font-medium hover:opacity-90 transition-opacity disabled:opacity-50 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
         >
           {loading ? (
             <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -95,7 +95,7 @@ export default function YouTubePage() {
       {loading && (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="flex gap-4 rounded-xl border border-gray-200 bg-white p-4">
+            <div key={i} className="flex gap-4 rounded-2xl bg-surface shadow-card p-4">
               <div className="skeleton shrink-0 w-32 sm:w-40 h-20 sm:h-24 rounded-lg" />
               <div className="flex-1 space-y-3 py-1">
                 <div className="skeleton h-4 w-3/4" />
@@ -113,7 +113,7 @@ export default function YouTubePage() {
             <Link
               key={video.id}
               href={`/youtube/${video.id}`}
-              className={`group flex gap-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-from)] animate-fade-in-up stagger-${Math.min(i + 1, 3)}`}
+              className={`group flex gap-4 rounded-2xl bg-surface shadow-card p-4 transition-all duration-200 hover:shadow-float hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 animate-fade-in-up stagger-${Math.min(i + 1, 3)}`}
             >
               <div className="shrink-0 w-32 sm:w-40 h-20 sm:h-24 rounded-lg overflow-hidden bg-gray-100">
                 {video.thumbnail ? (
@@ -133,10 +133,10 @@ export default function YouTubePage() {
               </div>
 
               <div className="flex-1 min-w-0 flex flex-col justify-between">
-                <h2 className="font-medium text-gray-900 line-clamp-2 group-hover:text-[var(--brand-from)] transition-colors">
+                <h2 className="font-medium text-gray-900 line-clamp-2 group-hover:text-blue-500 transition-colors">
                   {decodeHtml(video.title)}
                 </h2>
-                <span className="text-sm text-[var(--brand-from)] font-medium mt-2 group-hover:text-[var(--brand-to)] transition-colors">
+                <span className="text-sm text-blue-500 font-medium mt-2 group-hover:text-blue-500 transition-colors">
                   練習する →
                 </span>
               </div>
